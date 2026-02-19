@@ -6,10 +6,10 @@ import { ArrowRight } from "lucide-react"
 
 const footerLinks = {
   Platform: [
-    { label: "Explorer", href: "/markets" },
-    { label: "Top Data", href: "/top-data" },
+    { label: "Chat", href: "/chat" },
+    { label: "Search", href: "/search" },
+    { label: "Map", href: "/map" },
     { label: "Library", href: "/library" },
-    { label: "Workspace", href: "/workspace" },
   ],
   Apps: [
     { label: "Agent-First Builder", href: "/apps/agent-builder" },

@@ -8,7 +8,7 @@ This is a concise map of the Neon schema used by the app today. It focuses on th
 - **Query style:** raw SQL via `prisma.$queryRaw` (no schema changes here)
 
 ## High-level data flow
-```
+```text
 Neon
   ├─ agent_inventory_view_v1  ─┬─ /api/markets            ─→ /markets
   │                            ├─ /api/market-score/*     ─→ /market-score

@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client"
 import type { MarketScoreFilters, OverrideFlags, RoutingParams } from "@/lib/market-score/types"
 import { buildExclusionSql } from "@/lib/inventory-policy"
+import type { InventoryContract } from "@/lib/inventory-contract"
+import { DEFAULT_INVENTORY_CONTRACT } from "@/lib/inventory-contract"
 
 const SAFE_BANDS_ORDER = ["Institutional Safe", "Capital Safe", "Opportunistic", "Speculative"]
 
@@ -11,6 +13,10 @@ export function getSafetyBandOrder(band: string) {
 
 function toSqlList(values: string[]) {
   return Prisma.join(values.map((value) => Prisma.sql`${value}`))
+}
+
+function resolveContract(contract?: InventoryContract) {
+  return contract ?? DEFAULT_INVENTORY_CONTRACT
 }
 
 export function buildFilterSql(filters: MarketScoreFilters, options?: { includePriceTier?: boolean }): Prisma.Sql | null {
@@ -42,6 +48,7 @@ export function buildFilterSql(filters: MarketScoreFilters, options?: { includeP
 function buildOverrideUnion(
   selectSql: Prisma.Sql,
   overrideFlags: OverrideFlags,
+  contract?: InventoryContract,
 ): Prisma.Sql | null {
   const overrideClauses: Prisma.Sql[] = []
   if (overrideFlags.allow2030Plus) {
@@ -58,34 +65,43 @@ function buildOverrideUnion(
   if (overrideClauses.length === 0) return null
 
   const whereSql = Prisma.sql`${Prisma.join(overrideClauses, " OR ")}`
+  const resolved = resolveContract(contract)
+  const viewName = Prisma.raw(resolved.viewName)
 
-  return Prisma.sql`SELECT ${selectSql} FROM agent_inventory_view_v1 WHERE ${whereSql}`
+  return Prisma.sql`SELECT ${selectSql} FROM ${viewName} WHERE ${whereSql}`
 }
 
 export function buildInventorySourceSql(
   columns: Prisma.Sql,
   routing: RoutingParams,
   overrideFlags: OverrideFlags,
+  contract?: InventoryContract,
 ): Prisma.Sql {
+  const resolved = resolveContract(contract)
+  const unrankedFn = Prisma.raw(resolved.unrankedFn)
+  const rankedFn = Prisma.raw(resolved.rankedFn)
+  const viewName = Prisma.raw(resolved.viewName)
+
   if (routing.riskProfile && routing.horizon) {
     if (routing.ranked) {
-      return Prisma.sql`SELECT ${columns} FROM agent_ranked_for_investor_v1(${routing.riskProfile}, ${routing.horizon}, ${routing.budgetAed}, ${routing.preferredArea}, ${routing.bedsPref}, ${routing.intent})`
+      return Prisma.sql`SELECT ${columns} FROM ${rankedFn}(${routing.riskProfile}, ${routing.horizon}, ${routing.budgetAed}, ${routing.preferredArea}, ${routing.bedsPref}, ${routing.intent})`
     }
-    const baseSql = Prisma.sql`SELECT ${columns} FROM agent_inventory_for_investor_v1(${routing.riskProfile}, ${routing.horizon})`
-    const overrideSql = buildOverrideUnion(columns, overrideFlags)
+    const baseSql = Prisma.sql`SELECT ${columns} FROM ${unrankedFn}(${routing.riskProfile}, ${routing.horizon})`
+    const overrideSql = buildOverrideUnion(columns, overrideFlags, resolved)
     if (overrideSql) {
       return Prisma.sql`${baseSql} UNION ${overrideSql}`
     }
     return baseSql
   }
 
-  return Prisma.sql`SELECT ${columns} FROM agent_inventory_view_v1`
+  return Prisma.sql`SELECT ${columns} FROM ${viewName}`
 }
 
 export function buildSummaryBaseSql(
   routing: RoutingParams,
   overrideFlags: OverrideFlags,
   includePriceTier: boolean,
+  contract?: InventoryContract,
 ): Prisma.Sql {
   const columns = Prisma.join(
     [
@@ -101,7 +117,7 @@ export function buildSummaryBaseSql(
     ],
     ", ",
   )
-  return buildInventorySourceSql(columns, routing, overrideFlags)
+  return buildInventorySourceSql(columns, routing, overrideFlags, contract)
 }
 
 export function buildInventoryColumns(options?: { includeRank?: boolean }): Prisma.Sql {

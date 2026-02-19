@@ -3,9 +3,9 @@
 This repo is production-ready once the following end-to-end checks and handoffs are complete. Treat it like a senior delivery: validate data flows, automation, governance, and documentation before declaring the work “final”.
 
 ## 1. Data & Integration Preconditions
-- Run the **Notebook → Neon → App** sync and verify counts for `entrestate_master`, `media_enrichment`, `market_scores_v1`, and `agent_inventory_view_v1` as described in `docs/notebook-brief.md:21-81`.
-- Confirm exclusions for `lelwa/mashroi` and keep `price_aed` numeric. Do not change Neon schema/functions.
-- Recompute `market_scores_v1`, verify `agent_inventory_view_v1` reflects the latest inventory + scores, and write the `system_healthcheck` row with pass/fail metrics.
+- Run the **Notebook → Neon → App** sync and verify counts for `entrestate_master`, `media_enrichment`, `market_scores_v1`, and `automation_inventory_view_v1` as described in `docs/notebook-brief.md:21-81`.
+- Remove exclusions for `lelwa/mashroi` (data stays; UI filter only) and keep `price_aed` numeric. Do not change Neon schema/functions.
+- Recompute `market_scores_v1`, verify `automation_inventory_view_v1` reflects the latest inventory + scores, and write the `system_healthcheck` row with pass/fail metrics.
 - Execute the `docs/data-sync-checklist.md` workflow, logging any failures before proceeding.
 
 ## 2. CI, Smoke, and Contract Tests
@@ -31,7 +31,7 @@ This repo is production-ready once the following end-to-end checks and handoffs 
 ## 5. Documentation & Handoff
 - Document the finalized deployment + smoke flow in `README.md` or a dedicated `docs/` file (e.g., `docs/smoke-finalization-guide.md`).
 - Confirm the nightly DB contract plan, manual smoke workflow, smoke script security guarantees, and definition of done from `docs/smoke-finalization-guide.md:114-255` are in the documentation.
-- Update the notebook master brief to mention the finalized automation if the consumer (Notebook agent) needs to know.
+- Update the notebook master brief to mention the finalized automation if the consumer (Notebook automation) needs to know.
 - Inform stakeholders that smoke runs block promotion unless they succeed, and share any bypass token rotation SOPs.
 
 ## 6. Definition of Done

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client"
 
-export const EXCLUDED_KEYWORDS = ["lelwa", "mashroi"] as const
+export const EXCLUDED_KEYWORDS: readonly string[] = []
 
 const DEFAULT_COLUMNS = ["name", "developer", "area", "city"]
 

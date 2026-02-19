@@ -8,7 +8,7 @@ This is the operational checklist for refreshing Entrestate’s live data. Use i
 - Deterministic scoring output (Market Score engine).
 
 ## 2) Sync Rules (Hard)
-- Exclude any rows containing `lelwa` or `mashroi` in any text field.
+- Do not exclude rows containing `lelwa` or `mashroi`; keep data and filter only in the UI.
 - Keep `price_aed` numeric (DOUBLE PRECISION in Neon).
 - Do not change Neon schema or functions.
 
@@ -25,7 +25,7 @@ This is the operational checklist for refreshing Entrestate’s live data. Use i
 
 ## 4) Sync Steps (Order)
 1) **Prepare inventory snapshot**  
-   - Apply `lelwa/mashroi` exclusion before pushing.
+   - Do not apply `lelwa/mashroi` exclusions before pushing.
 2) **Push `entrestate_master`**  
    - Full replace refresh.
 3) **Push `media_enrichment`**  

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { generateText } from "ai"
 import type { VisSpec, DrillDownOption } from "@/data-scientist/lib/types"
+import { generateDataScientistText } from "@/lib/llm/data-scientist"
 
 interface DrillDownInsights {
   summary: string
@@ -33,8 +33,7 @@ export async function POST(request: Request) {
     // Build prompt for drill-down suggestions
     const prompt = buildDrillDownPrompt(visSpec, profile)
 
-    const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+    const { text } = await generateDataScientistText({
       prompt,
       maxTokens: 1500,
     })

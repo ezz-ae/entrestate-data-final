@@ -6,7 +6,8 @@ const hasDatabaseUrl = Boolean(
   process.env.DATABASE_URL ||
     process.env.DATABASE_URL_UNPOOLED ||
     process.env.NEON_DATABASE_URL ||
-    process.env.NEON_DATABASE_URL_UNPOOLED,
+    process.env.NEON_DATABASE_URL_UNPOOLED ||
+    process.env.NEON_READONLY_URL,
 )
 
 const describeDb = hasDatabaseUrl ? describe : describe.skip
@@ -57,6 +58,19 @@ describeDb("database contract", () => {
     }
   })
 
+  it("enforces price_from_aed type on entrestate_master", async () => {
+    const rows = await prisma.$queryRaw<{ data_type: string }[]>(Prisma.sql`
+      SELECT data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'entrestate_master'
+        AND column_name = 'price_from_aed'
+    `)
+
+    if (rows.length === 0) return
+    expect(rows[0].data_type).toBe("double precision")
+  })
+
   it("enforces core column types on the inventory view", async () => {
     const rows = await prisma.$queryRaw<
       {
@@ -75,7 +89,7 @@ describeDb("database contract", () => {
         pg_typeof(reason_codes)::text AS reason_type,
         pg_typeof(risk_flags)::text AS risk_type,
         pg_typeof(drivers)::text AS drivers_type
-      FROM agent_inventory_view_v1
+      FROM automation_inventory_view_v1
       LIMIT 1
     `)
 
@@ -106,7 +120,7 @@ describeDb("database contract", () => {
   it("returns required columns for unranked investor function", async () => {
     const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`
       SELECT *
-      FROM agent_inventory_for_investor_v1('Conservative', 'Ready')
+      FROM automation_inventory_for_investor_v1('Conservative', 'Ready')
       LIMIT 1
     `)
     if (rows.length === 0) return
@@ -131,7 +145,7 @@ describeDb("database contract", () => {
   it("returns required columns for ranked investor function", async () => {
     const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`
       SELECT *
-      FROM agent_ranked_for_investor_v1('Balanced', '1-2yr', 2000000, 'Dubai', '2BR', 'invest')
+      FROM automation_ranked_for_investor_v1('Balanced', '1-2yr', 2000000, 'Dubai', '2BR', 'invest')
       LIMIT 1
     `)
     if (rows.length === 0) return

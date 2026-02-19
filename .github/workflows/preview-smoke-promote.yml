@@ -66,7 +66,7 @@ jobs:
           BASE_URL: https://${{ needs.deploy_preview.outputs.url }}
           BYPASS_HEADER: x-vercel-protection-bypass
           BYPASS_TOKEN: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
-        run: ./scripts/smoke.sh
+        run: bash scripts/smoke.sh
 
   promote:
     needs: smoke

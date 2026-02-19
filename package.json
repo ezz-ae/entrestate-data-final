@@ -9,11 +9,14 @@
     "postinstall": "prisma generate",
     "smoke": "bash scripts/smoke.sh",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db-contract": "vitest run tests/db-contract.test.ts"
   },
   "dependencies": {
     "@ai-sdk/gateway": "latest",
     "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "^3.0.30",
+    "@ai-sdk/react": "^3.0.93",
     "@emotion/is-prop-valid": "latest",
     "@fal-ai/client": "latest",
     "@fal-ai/server-proxy": "latest",

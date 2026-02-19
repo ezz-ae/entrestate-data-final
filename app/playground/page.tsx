@@ -45,6 +45,13 @@ const models: Model[] = [
   { id: "gemini-1-5-pro", name: "Gemini 1.5 Pro", provider: "Google", maxTokens: 1000000 },
   { id: "llama-3-1-405b", name: "Llama 3.1 405B", provider: "Meta", maxTokens: 128000 },
   { id: "mistral-large-2", name: "Mistral Large 2", provider: "Mistral", maxTokens: 128000 },
+  { id: "huggingface/moonshotai/Kimi-K2.5", name: "Kimi K2.5", provider: "Hugging Face", maxTokens: 128000 },
+  {
+    id: "huggingface/zai-org/GLM-4.7-Flash",
+    name: "GLM-4.7 Flash (Media + Code)",
+    provider: "Hugging Face",
+    maxTokens: 128000,
+  },
 ]
 
 const presetPrompts = [

@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       apiKey: apiKey,
     })
 
-    const model = gateway("google/gemini-2.5-flash")
+    const modelId = process.env.MEDIA_TEXT_MODEL || "google/gemini-2.5-flash"
+    const model = gateway(modelId)
 
     const systemPrompt = `
       You are an expert prompt writer specializing in image and video generation.

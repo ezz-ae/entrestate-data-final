@@ -71,14 +71,14 @@ const docPages: Record<string, DocPage> = {
     steps: ["Pick the asset set", "Apply a style pack", "Export for listings"],
     cta: { label: "Open Image Studio", href: "/image-playground" },
   },
-  "agent-first-builder": {
-    title: "Agent-First Builder",
-    subtitle: "Create real estate agents with a guided business-first flow.",
+  "automation-first-builder": {
+    title: "Automation-First Builder",
+    subtitle: "Create real estate automations with a guided business-first flow.",
     useCases: ["Lead qualification", "Investor matching", "Listing follow-up"],
     sections: [
       {
         title: "What it does",
-        body: "Turns business inputs into a working agent without technical setup.",
+        body: "Turns business inputs into a working automation without technical setup.",
       },
       {
         title: "Why it matters",
@@ -86,7 +86,7 @@ const docPages: Record<string, DocPage> = {
       },
     ],
     steps: ["Pick a role", "Set the rules", "Launch the agent"],
-    cta: { label: "Open Agent-First Builder", href: "/apps/agent-builder" },
+    cta: { label: "Open Automation-First Builder", href: "/apps/automation-builder" },
   },
   "cold-calling": {
     title: "Cold Calling",
@@ -105,8 +105,8 @@ const docPages: Record<string, DocPage> = {
     steps: ["Load your list", "Use the call script", "Log outcomes"],
     cta: { label: "Open Cold Calling", href: "/apps/coldcalling" },
   },
-  "insta-dm-lead-agent": {
-    title: "Insta DM Lead Agent",
+  "insta-dm-lead-automation": {
+    title: "Insta DM Lead Automation",
     subtitle: "Qualify leads in Instagram DMs, web chat, QR codes, and landing pages.",
     useCases: ["Inbound DM capture", "Website chat", "Event QR lead capture"],
     sections: [
@@ -120,7 +120,7 @@ const docPages: Record<string, DocPage> = {
       },
     ],
     steps: ["Connect Instagram DM", "Set the qualifying flow", "Start capturing leads"],
-    cta: { label: "Open Insta DM Lead Agent", href: "/apps/lead-agent" },
+    cta: { label: "Open Insta DM Lead Automation", href: "/apps/lead-automation" },
   },
 }
 

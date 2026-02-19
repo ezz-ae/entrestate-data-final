@@ -19,24 +19,25 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { Button } from "@/agent-builder/components/ui/button"
+import { Button } from "@/automation-builder/components/ui/button"
 import { Save, Upload, Play, Menu, X, ShieldCheck } from "lucide-react"
-import TextModelNode from "@/agent-builder/components/nodes/text-model-node"
-import EmbeddingModelNode from "@/agent-builder/components/nodes/embedding-model-node"
-import ToolNode from "@/agent-builder/components/nodes/tool-node"
-import StructuredOutputNode from "@/agent-builder/components/nodes/structured-output-node"
-import PromptNode from "@/agent-builder/components/nodes/prompt-node"
-import ImageGenerationNode from "@/agent-builder/components/nodes/image-generation-node"
-import AudioNode from "@/agent-builder/components/nodes/audio-node"
-import JavaScriptNode from "@/agent-builder/components/nodes/javascript-node"
-import StartNode from "@/agent-builder/components/nodes/start-node"
-import EndNode from "@/agent-builder/components/nodes/end-node"
-import ConditionalNode from "@/agent-builder/components/nodes/conditional-node"
-import HttpRequestNode from "@/agent-builder/components/nodes/http-request-node"
+import TextModelNode from "@/automation-builder/components/nodes/text-model-node"
+import EmbeddingModelNode from "@/automation-builder/components/nodes/embedding-model-node"
+import ToolNode from "@/automation-builder/components/nodes/tool-node"
+import StructuredOutputNode from "@/automation-builder/components/nodes/structured-output-node"
+import PromptNode from "@/automation-builder/components/nodes/prompt-node"
+import ImageGenerationNode from "@/automation-builder/components/nodes/image-generation-node"
+import AudioNode from "@/automation-builder/components/nodes/audio-node"
+import JavaScriptNode from "@/automation-builder/components/nodes/javascript-node"
+import StartNode from "@/automation-builder/components/nodes/start-node"
+import EndNode from "@/automation-builder/components/nodes/end-node"
+import ConditionalNode from "@/automation-builder/components/nodes/conditional-node"
+import HttpRequestNode from "@/automation-builder/components/nodes/http-request-node"
 
-import { NodePalette } from "@/agent-builder/components/node-palette"
-import { NodeConfigPanel } from "@/agent-builder/components/node-config-panel"
-import { ExecutionPanel } from "@/agent-builder/components/execution-panel"
+import { NodePalette } from "@/automation-builder/components/node-palette"
+import { NodeConfigPanel } from "@/automation-builder/components/node-config-panel"
+import { ExecutionPanel } from "@/automation-builder/components/execution-panel"
+import { AgentRole, CompanyType } from '@prisma/client';
 
 const STORAGE_KEY = "agent-builder-pro-workflow"
 
@@ -135,6 +136,7 @@ export function ProCanvas({ editable, onToggleEdit }: ProCanvasProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false)
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem("palette-collapsed")
@@ -148,19 +150,43 @@ export function ProCanvas({ editable, onToggleEdit }: ProCanvasProps) {
   }, [isPaletteCollapsed])
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
+    const fetchInitialAgent = async () => {
       try {
-        const workflow = JSON.parse(saved)
-        if (workflow.nodes && workflow.edges) {
-          setNodes(workflow.nodes)
-          setEdges(workflow.edges)
+        const listResponse = await fetch("/api/automation-builder/list");
+        if (!listResponse.ok) {
+          throw new Error("Failed to fetch agent list");
         }
-      } catch {
-        // ignore
+        const agents = await listResponse.json();
+
+        if (agents && agents.length > 0) {
+          const firstAgentId = agents[0].id;
+          const agentResponse = await fetch(`/api/automation-builder/${firstAgentId}`);
+          if (!agentResponse.ok) {
+            throw new Error(`Failed to fetch agent ${firstAgentId}`);
+          }
+          const agent = await agentResponse.json();
+
+          if (agent?.workflowGraph?.nodes && agent?.workflowGraph?.edges) {
+            setNodes(agent.workflowGraph.nodes);
+            setEdges(agent.workflowGraph.edges);
+            setCurrentAgentId(agent.id);
+          } else {
+            console.warn("First agent found but no workflowGraph data.");
+          }
+        } else {
+          console.log("No agents found, starting with initial workflow.");
+          setNodes(initialNodes);
+          setEdges(initialEdges);
+        }
+      } catch (error) {
+        console.error("Error fetching initial agent workflow:", error);
+        // Fallback to initial nodes if API fails
+        setNodes(initialNodes);
+        setEdges(initialEdges);
       }
-    }
-  }, [])
+    };
+    fetchInitialAgent();
+  }, []); // Empty dependency array means this runs once on mount
 
   useEffect(() => {
     const maxId = Math.max(...nodes.map((n) => Number.parseInt(n.id) || 0), 0)
@@ -235,10 +261,54 @@ export function ProCanvas({ editable, onToggleEdit }: ProCanvasProps) {
     setSelectedNode((node) => (node?.id === nodeId ? { ...node, data } : node))
   }, [])
 
-  const handleExportWorkflow = useCallback(() => {
-    const workflow = { nodes, edges }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(workflow))
-  }, [nodes, edges])
+  const handleExportWorkflow = useCallback(async () => {
+    const agentName = window.prompt("Enter a name for your agent:");
+    if (!agentName) return;
+
+    // TODO: Dynamically get teamId, role, market, companyType from user context or configuration
+    const teamId = "clx1s5e3900003b6w5q3r8f9h"; // Placeholder teamId - REPLACE WITH ACTUAL TEAM ID
+    const agentRole = AgentRole.lead_qualifier; // Placeholder role
+    const agentMarket = "Dubai"; // Placeholder market
+    const agentCompanyType = CompanyType.broker; // Placeholder company type
+
+    const workflowPayload = {
+      name: agentName,
+      teamId,
+      role: agentRole,
+      market: agentMarket,
+      companyType: agentCompanyType,
+      inputs: {}, // Placeholder
+      rules: {}, // Placeholder
+      outputs: {}, // Placeholder
+      connectors: {}, // Placeholder
+      nodes,
+      edges,
+    };
+
+    try {
+      const response = await fetch("/api/automation-builder/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(workflowPayload),
+      });
+
+      if (response.ok) {
+        const savedAgent = await response.json();
+        console.log("Agent workflow saved successfully:", savedAgent);
+        alert(`Agent '${agentName}' saved!`);
+        // TODO: Update currentAgentId state if needed for further operations (e.g., update)
+      } else {
+        const errorData = await response.json();
+        console.error("Failed to save agent workflow:", errorData);
+        alert(`Failed to save agent: ${errorData.error || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error saving agent workflow:", error);
+      alert("An unexpected error occurred while saving the agent.");
+    }
+  }, [nodes, edges]);
 
   const handleImportWorkflow = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]

@@ -36,7 +36,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   city: ["city_clean", "city", "city_name", "emirate"],
   area: ["area", "area_clean", "district", "sub_area", "community"],
   developer: ["developer_canonical", "developer", "developer_name", "master_developer"],
-  price: ["final_price_from", "price_from_aed", "price_from", "price_start", "starting_price"],
+  price: ["final_price_from", "price_from_aed", "price_start", "starting_price"],
   risk: ["derived_risk_class", "risk_class", "risk_bucket"],
   delivery: ["market_timing", "delivery_confidence", "handover_timing", "final_status"],
   confidence: ["data_confidence", "confidence", "confidence_score"],

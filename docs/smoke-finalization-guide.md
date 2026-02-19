@@ -98,7 +98,7 @@ jobs:
           BASE_URL: https://${{ needs.deploy_preview.outputs.url }}
           BYPASS_HEADER: x-vercel-protection-bypass
           BYPASS_TOKEN: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
-        run: ./smoke.sh
+        run: bash scripts/smoke.sh
 
   promote:
     needs: smoke
@@ -149,10 +149,10 @@ jobs:
           BASE_URL: ${{ inputs.base_url }}
           BYPASS_HEADER: x-vercel-protection-bypass
           BYPASS_TOKEN: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
-        run: ./smoke.sh
+        run: bash scripts/smoke.sh
 ```
 
-## Smoke Suite Hardening (`smoke.sh`)
+## Smoke Suite Hardening (`scripts/smoke.sh`)
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -378,4 +378,4 @@ pass "chat oversized"
 ## Suggested Next Steps
 1. Confirm whether Preview-as-staging with `vercel promote` is acceptable or if a dedicated staging project is needed.
 2. Decide whether previews should be public or gated via a bypass token.
-3. Wire the GitHub Actions workflows above and add the hardened `smoke.sh`.
+3. Wire the GitHub Actions workflows above and add the hardened `scripts/smoke.sh`.

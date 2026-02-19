@@ -35,7 +35,7 @@ describe("agent runtime queries", () => {
     })
 
     const text = sqlText(sql)
-    expect(text).toContain("agent_inventory_for_investor_v1")
+    expect(text).toContain("automation_inventory_for_investor_v1")
     expect(text).not.toContain("Speculative")
   })
 

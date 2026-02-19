@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { generateText } from "ai"
 import { getDataset } from "@/data-scientist/lib/dataset-store"
 import type { VisSpec, ChartSummaryStats, LLMInsightsResponse } from "@/data-scientist/lib/types"
+import { generateDataScientistText } from "@/lib/llm/data-scientist"
 
 export async function POST(request: Request) {
   try {
@@ -29,8 +29,7 @@ export async function POST(request: Request) {
     const prompt = buildInsightPrompt(dataset.profile, visSpec, chartSummaryStats)
 
     // Call LLM
-    const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+    const { text } = await generateDataScientistText({
       prompt,
       maxTokens: 1000,
     })

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import type { AgentRuntimeResponse, AgentRuntimeRunInput } from "@/lib/agent-runtime/types"
+import type { AutomationRuntimeResponse, AutomationRuntimeRunInput } from "@/lib/automation-runtime/types"
 import { buildRunQuery } from "@/lib/agent-runtime/queries"
 
 type DbClient = {

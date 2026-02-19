@@ -152,17 +152,17 @@ assert_market_score_summary() {
 }
 
 assert_chat_response() {
-  jq -e '.matches and (.matches|type=="array") and .cards and (.cards|type=="array")' "$RESP_BODY_FILE" >/dev/null 2>&1 \
-    || fail "missing matches/cards"
+  jq -e '.narrative and .timetableId' "$RESP_BODY_FILE" >/dev/null 2>&1 \
+    || fail "missing narrative or timetableId"
 }
 
 if [ -z "${CHAT_PAYLOAD:-}" ]; then
-  CHAT_PAYLOAD=$(jq -nc --arg q "smoke test" '{q:$q, features:["markets"], limit:3}')
+  CHAT_PAYLOAD=$(jq -nc --arg q "smoke test" '{message:$q, context:{city:"Dubai"}}')
 fi
 
 if [ -z "${CHAT_PAYLOAD_OVERSIZED:-}" ]; then
   big=$(printf 'a%.0s' {1..5000})
-  CHAT_PAYLOAD_OVERSIZED=$(jq -nc --arg q "$big" '{q:$q, features:["markets"], limit:3}')
+  CHAT_PAYLOAD_OVERSIZED=$(jq -nc --arg q "$big" '{message:$q}')
 fi
 
 TOTAL=$((TOTAL + 1))

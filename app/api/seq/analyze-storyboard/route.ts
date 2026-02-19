@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
       apiKey: apiKey,
     })
 
-    const model = gateway("google/gemini-3-pro-image")
+    const modelId = process.env.MEDIA_VISION_MODEL || "google/gemini-3-pro-image"
+    const model = gateway(modelId)
 
     const analysisPrompt = `
       Analyze this storyboard image to determine the exact number of distinct narrative panels.

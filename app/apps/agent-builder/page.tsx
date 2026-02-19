@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { Navbar } from "@/components/navbar"
-import AgentBuilderApp from "@/agent-builder/agent-builder-app"
+import AgentBuilderApp from "@/automation-builder/agent-builder-app"
 
 export const metadata: Metadata = {
   title: "Agent-First Builder - Entrestate",

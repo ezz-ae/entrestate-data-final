@@ -20,7 +20,7 @@ This template is licensed for use under the following terms:
 
 Attribution is appreciated but not required. If you'd like to credit the original template author:
 
-```
+```text
 Built with Infiner Template by Webrenew
 ```
 

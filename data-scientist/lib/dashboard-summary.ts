@@ -39,7 +39,6 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   price: [
     "final_price_from",
     "price_from_aed",
-    "price_from",
     "price_start",
     "starting_price",
     "price_aed",

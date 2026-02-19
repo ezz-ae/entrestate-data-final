@@ -24,6 +24,7 @@ import {
   buildOverrideInsertQuery,
   buildSummaryBaseSql,
 } from "@/lib/market-score/queries"
+import { resolveInventoryContract } from "@/lib/inventory-contract"
 
 type DbClient = {
   $queryRaw<T>(query: unknown): Promise<T>
@@ -48,9 +49,10 @@ export async function getMarketScoreSummary(
   overrideFlags: OverrideFlags,
   db: DbClient = prisma,
 ): Promise<MarketScoreSummary> {
-  const hasPriceTier = await hasColumn(db, "agent_inventory_view_v1", "price_tier")
+  const contract = await resolveInventoryContract(db)
+  const hasPriceTier = await hasColumn(db, contract.viewName, "price_tier")
   const includePriceTier = hasPriceTier && !routing.ranked
-  const baseSql = buildSummaryBaseSql(routing, overrideFlags, includePriceTier)
+  const baseSql = buildSummaryBaseSql(routing, overrideFlags, includePriceTier, contract)
   const filterSql = buildFilterSql(filters, { includePriceTier })
 
   const [totalRows, avgScoreRows, safetyRows, classRows, statusAvgRows, safetyAvgRows, priceAvgRows] =
@@ -84,6 +86,7 @@ export async function getMarketScoreSummary(
           { riskProfile: DEFAULT_TRUTH_PROFILE, horizon: DEFAULT_TRUTH_HORIZON },
           { allow2030Plus: false, allowSpeculative: false },
           false,
+          contract,
         ),
       ),
     ),
@@ -93,6 +96,7 @@ export async function getMarketScoreSummary(
           { riskProfile: BALANCED_PROFILE, horizon: BALANCED_HORIZON },
           { allow2030Plus: false, allowSpeculative: false },
           false,
+          contract,
         ),
       ),
     ),
@@ -138,9 +142,10 @@ export async function getMarketScoreCharts(
   overrideFlags: OverrideFlags,
   db: DbClient = prisma,
 ): Promise<MarketScoreCharts> {
-  const hasPriceTier = await hasColumn(db, "agent_inventory_view_v1", "price_tier")
+  const contract = await resolveInventoryContract(db)
+  const hasPriceTier = await hasColumn(db, contract.viewName, "price_tier")
   const includePriceTier = hasPriceTier && !routing.ranked
-  const baseSql = buildSummaryBaseSql(routing, overrideFlags, includePriceTier)
+  const baseSql = buildSummaryBaseSql(routing, overrideFlags, includePriceTier, contract)
   const filterSql = buildFilterSql(filters, { includePriceTier })
 
   const [safetyRows, statusAvgRows, safetyAvgRows, priceAvgRows, cityRows] = await Promise.all([
@@ -170,9 +175,10 @@ export async function getMarketScoreInventory(
   pagination: PaginationParams,
   db: DbClient = prisma,
 ): Promise<MarketScoreInventoryResponse> {
+  const contract = await resolveInventoryContract(db)
   const columns = buildInventoryColumns({ includeRank: Boolean(routing.ranked) })
-  const baseSql = buildInventorySourceSql(columns, routing, overrideFlags)
-  const hasPriceTier = await hasColumn(db, "agent_inventory_view_v1", "price_tier")
+  const baseSql = buildInventorySourceSql(columns, routing, overrideFlags, contract)
+  const hasPriceTier = await hasColumn(db, contract.viewName, "price_tier")
   const filterSql = buildFilterSql(filters, { includePriceTier: hasPriceTier && !routing.ranked })
   const limit = pagination.pageSize
   const offset = (pagination.page - 1) * pagination.pageSize
@@ -217,20 +223,24 @@ export async function recordOverride(
 }
 
 export async function buildTruthChecks(db: DbClient) {
+  const contract = await resolveInventoryContract(db)
   const conservativeBase = buildSummaryBaseSql(
     { riskProfile: DEFAULT_TRUTH_PROFILE, horizon: DEFAULT_TRUTH_HORIZON },
     { allow2030Plus: false, allowSpeculative: false },
     false,
+    contract,
   )
   const balancedBase = buildSummaryBaseSql(
     { riskProfile: BALANCED_PROFILE, horizon: BALANCED_HORIZON },
     { allow2030Plus: false, allowSpeculative: false },
     false,
+    contract,
   )
   const conservativeMidBase = buildSummaryBaseSql(
     { riskProfile: DEFAULT_TRUTH_PROFILE, horizon: "2-4yr" },
     { allow2030Plus: false, allowSpeculative: false },
     false,
+    contract,
   )
 
   const [conservativeRows, balancedRows, speculativeLeakRows, horizonViolationRows] = await Promise.all([

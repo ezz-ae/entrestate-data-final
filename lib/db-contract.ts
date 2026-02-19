@@ -8,7 +8,7 @@ export type RelationContract = {
 
 export const REQUIRED_RELATIONS: RelationContract[] = [
   {
-    name: "agent_inventory_view_v1",
+    name: "automation_inventory_view_v1",
     type: ["VIEW", "BASE TABLE"],
     requiredColumns: [
       "asset_id",
@@ -71,7 +71,7 @@ export const REQUIRED_RELATIONS: RelationContract[] = [
   {
     name: "entrestate_master",
     type: "BASE TABLE",
-    requiredColumns: ["project_id", "name"],
+    requiredColumns: ["project_id", "name", "price_from_aed"],
   },
   {
     name: "media_enrichment",
@@ -81,8 +81,8 @@ export const REQUIRED_RELATIONS: RelationContract[] = [
 ]
 
 export const REQUIRED_FUNCTIONS = [
-  "agent_inventory_for_investor_v1",
-  "agent_ranked_for_investor_v1",
+  "automation_inventory_for_investor_v1",
+  "automation_ranked_for_investor_v1",
   "compute_match_score",
   "generate_override_disclosure",
 ] as const

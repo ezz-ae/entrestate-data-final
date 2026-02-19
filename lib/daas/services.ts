@@ -19,7 +19,7 @@ import {
 type DataRow = Record<string, unknown>
 
 const MAX_DAAS_ROWS = 25000
-const DAAS_PREFERRED_TABLE: "entrestate_master" | "agent_inventory_view_v1" = "entrestate_master"
+const DAAS_PREFERRED_TABLE: "entrestate_master" | "automation_inventory_view_v1" = "entrestate_master"
 
 const DEFAULT_PAGE_SIZE = 25
 const MAX_PAGE_SIZE = 100

@@ -14,7 +14,7 @@ This is the operational checklist for refreshing Entrestate’s live data. Use i
 - Deterministic scoring output (Market Score engine).
 
 ### 2) Sync Rules (Hard)
-- Exclude any rows containing `lelwa` or `mashroi` in any text field.
+- Do not exclude rows containing `lelwa` or `mashroi`; keep data and filter only in the UI.
 - Keep `price_aed` numeric (DOUBLE PRECISION in Neon).
 - Do not change Neon schema or functions.
 
@@ -24,14 +24,14 @@ This is the operational checklist for refreshing Entrestate’s live data. Use i
 | Inventory master | `entrestate_master` | Replace/refresh full table | `/api/daas`, `/api/data-scientist/dataset/entrestate` |
 | Media assets | `media_enrichment` | Refresh with same asset ids | `/api/seq/project-library` → Media Creator |
 | Scoring engine | `market_scores_v1` | Recompute after inventory | Used via `agent_inventory_view_v1` |
-| Joined view | `agent_inventory_view_v1` | View auto-updates after tables | `/api/markets`, `/api/chat`, `/api/market-score/*`, `/api/agent-runtime/run` |
+  - Joined view | `automation_inventory_view_v1` | View auto-updates after tables | `/api/markets`, `/api/chat`, `/api/market-score/*`, `/api/automation-runtime/run` |
 | Match profile config | `investor_profiles_v1` | Seed/maintain as config | Matching functions |
 | Overrides | `investor_override_audit` | App writes only | Audit trail |
 | Health | `system_healthcheck` | Write after sync | Trust strip |
 
 ### 4) Sync Steps (Order)
 1) **Prepare inventory snapshot**  
-   - Apply `lelwa/mashroi` exclusion before pushing.
+   - Do not apply `lelwa/mashroi` exclusions before pushing; keep data intact.
 2) **Push `entrestate_master`**  
    - Full replace refresh.
 3) **Push `media_enrichment`**  
@@ -48,9 +48,9 @@ This is the operational checklist for refreshing Entrestate’s live data. Use i
 SELECT COUNT(*) FROM entrestate_master;
 SELECT COUNT(*) FROM media_enrichment;
 SELECT COUNT(*) FROM market_scores_v1;
-SELECT COUNT(*) FROM agent_inventory_view_v1;
+SELECT COUNT(*) FROM automation_inventory_view_v1;
 
-SELECT COUNT(*) FROM agent_inventory_view_v1
+SELECT COUNT(*) FROM automation_inventory_view_v1
 WHERE safety_band = 'Speculative' AND classification = 'Conservative';
 ```
 
@@ -81,7 +81,7 @@ This is the concise map of the Neon schema used by the app today. It focuses on 
 - **Query style:** raw SQL via `prisma.$queryRaw` (no schema changes here)
 
 ### High-level data flow
-```
+```text
 Neon
   ├─ agent_inventory_view_v1  ─┬─ /api/markets            ─→ /markets
   │                            ├─ /api/market-score/*     ─→ /market-score
@@ -105,7 +105,7 @@ Neon
 
 - **agent_inventory_view_v1** (view)  
   Joined inventory + scoring.  
-  Used by: `app/api/markets/route.ts`, `lib/market-score/queries.ts`, `lib/agent-runtime/queries.ts`.
+Used by: `app/api/markets/route.ts`, `lib/market-score/queries.ts`, `lib/automation-runtime/queries.ts`.
 
 - **agent_inventory_for_investor_v1(risk_profile, horizon)** (function)  
   Matched candidate set with hard gates.  
@@ -116,7 +116,7 @@ Neon
   Used by: `lib/market-score/queries.ts`, `lib/agent-runtime/queries.ts`.
 
 - **compute_match_score(asset_id, budget_aed, preferred_area, beds_pref, intent)** (function)  
-  Used by `lib/agent-runtime/queries.ts` when ranking override additions.
+  - Used by `lib/automation-runtime/queries.ts` when ranking override additions.
 
 **Override safety + audit**
 - **investor_override_audit** (table)  
@@ -145,7 +145,7 @@ Neon
 ### Data feed endpoints → UI pages
 - `/api/markets` → `/markets`
 - `/api/market-score/*` → `/market-score`
-- `/api/agent-runtime/*` → `/agent-runtime`
+- `/api/agent-runtime/*` → `/automation-runtime`
 - `/api/daas` → `/workspace/daas`
 - `/api/data-scientist/dataset/entrestate` → `/workspace/data-scientist`
 - `/api/seq/project-library` → `/agents` (Media Creator)
@@ -165,7 +165,7 @@ This is the operational map for the platform, including content intent and imple
 - **Live**: Connected to Neon or active data feeds.
 - **Hybrid**: Live data + curated content.
 - **UI Only**: Layout/UX complete, no live backend dependency.
-- **Preview**: Feature is in demo mode or uses fixed placeholder output.
+- **Preview**: Feature is in demo mode or uses fixed demo output.
 
 ### Public Marketing
 | Route | Purpose | Status |
@@ -255,7 +255,7 @@ This is the operational map for the platform, including content intent and imple
 These are the active requirements the notebook agent must respect.
 
 1) **Exclude sources**  
-   - Ignore any records containing `lelwa` or `mashroi`.
+   - Do not ignore records containing `lelwa` or `mashroi`.
 
 2) **Numeric integrity**  
    - Keep `price_aed` as DOUBLE PRECISION (no text casts).
@@ -275,5 +275,5 @@ These are the active requirements the notebook agent must respect.
 ## E) Quick Handoff Summary (for Notebook Agent)
 - Refresh `entrestate_master` + `media_enrichment` every run.
 - Recompute `market_scores_v1`, validate `agent_inventory_view_v1`.
-- Exclude `lelwa` and `mashroi` at source.
+- Do not exclude `lelwa` and `mashroi` at source.
 - Update `system_healthcheck` with counts and pass/fail checks.

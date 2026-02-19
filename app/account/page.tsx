@@ -77,7 +77,7 @@ export default function AccountPage() {
                   <div>
                     <h2 className="text-lg font-medium text-foreground">Connected apps</h2>
                     <p className="text-sm text-muted-foreground">
-                      Media Creator, Agent Builder, and data services live under the same account.
+                      Media Creator, Automation Builder, and data services live under the same account.
                     </p>
                   </div>
                 </div>

@@ -31,7 +31,7 @@ describe("market score queries", () => {
       { riskProfile: "Conservative", horizon: "Ready" },
       { allow2030Plus: false, allowSpeculative: false },
     )
-    expect(sqlText(sql)).toContain("agent_inventory_for_investor_v1")
+    expect(sqlText(sql)).toContain("automation_inventory_for_investor_v1")
   })
 
   it("routes to ranked function when ranked is enabled", () => {
@@ -40,7 +40,7 @@ describe("market score queries", () => {
       { riskProfile: "Balanced", horizon: "1-2yr", ranked: true, budgetAed: 1000000 },
       { allow2030Plus: false, allowSpeculative: false },
     )
-    expect(sqlText(sql)).toContain("agent_ranked_for_investor_v1")
+    expect(sqlText(sql)).toContain("automation_ranked_for_investor_v1")
   })
 
   it("creates override audit insert", () => {

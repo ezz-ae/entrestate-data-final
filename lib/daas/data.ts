@@ -12,7 +12,7 @@ const STATEMENT_TIMEOUT_MS = 8000
 const DEFAULT_MAX_ROWS = 20000
 
 const NEON_TABLES = [
-  { name: "agent_inventory_view_v1", label: "agent_inventory_view_v1" },
+  { name: "automation_inventory_view_v1", label: "automation_inventory_view_v1" },
   { name: "entrestate_master", label: "entrestate_master" },
 ]
 

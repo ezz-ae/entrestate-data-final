@@ -44,6 +44,60 @@
   --scrollbar-track: #e2e8f0;
 }
 
+.home-shell {
+  --home-ink: #0f141b;
+  --home-muted: #5a6674;
+  --home-accent: #ff6b3d;
+  --home-accent-strong: #e94b21;
+  --home-accent-soft: #ffe2d4;
+  --home-accent-2: #28bfa7;
+  --home-surface: #f7f3ef;
+  --home-card: #ffffff;
+  --home-border: rgba(15, 20, 27, 0.12);
+  --home-shadow: rgba(15, 20, 27, 0.2);
+  --home-ring: rgba(255, 107, 61, 0.45);
+}
+
+.llm-theme {
+  color-scheme: dark;
+  --background: #07090d;
+  --foreground: #f8fafc;
+  --card: #0f131a;
+  --card-foreground: #f8fafc;
+  --popover: #0f131a;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #101521;
+  --secondary-foreground: #e2e8f0;
+  --muted: #141a26;
+  --muted-foreground: #94a3b8;
+  --accent: #121826;
+  --accent-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #38bdf8;
+  --chart-1: #3b82f6;
+  --chart-2: #22d3ee;
+  --chart-3: #0ea5e9;
+  --chart-4: #38bdf8;
+  --chart-5: #60a5fa;
+  --radius: 0.9rem;
+  --sidebar: #0b0f16;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #111827;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #1f2937;
+  --sidebar-ring: #38bdf8;
+  --surface-dark: #0a0f16;
+  --surface-elevated: #111827;
+  --scrollbar-track: #0b0f16;
+}
+
 :root[data-reading="on"] .reading-copy {
   font-size: 1.05rem;
   line-height: 1.85;

@@ -92,7 +92,7 @@ Speculative leak (Conservative 2-4yr): 0
 - tags (text)
 - developer (text)
 - area (text)
-- price_from_aed (text)
+- price_from_aed (double precision)
 - bedrooms_min (double precision)
 - bedrooms_max (double precision)
 - launch_year (double precision)
@@ -319,4 +319,3 @@ Speculative leak (Conservative 2-4yr): 0
 - checked_at (text)
 - architecture (text)
 - id (integer)
-
