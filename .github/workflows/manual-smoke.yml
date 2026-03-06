@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       base_url:
-        description: "Base URL (include https://)"
-        required: true
+        description: "Base URL (include https://). Defaults to production."
+        required: false
+        default: "https://entrestate.com"
 
 jobs:
   smoke:
@@ -19,7 +20,7 @@ jobs:
 
       - name: Run smoke suite
         env:
-          BASE_URL: ${{ inputs.base_url }}
+          BASE_URL: ${{ inputs.base_url || 'https://entrestate.com' }}
           BYPASS_HEADER: x-vercel-protection-bypass
           BYPASS_TOKEN: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
         run: bash scripts/smoke.sh

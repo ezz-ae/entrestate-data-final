@@ -5,7 +5,29 @@ on:
     branches: [main]
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+      reason: ${{ steps.check.outputs.reason }}
+    steps:
+      - name: Check required Vercel secrets
+        id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "reason=all_required_secrets_present" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "reason=missing_VERCEL_TOKEN_or_VERCEL_ORG_ID" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy_preview:
+    needs: preflight
+    if: needs.preflight.outputs.can_deploy == 'true'
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -39,7 +61,8 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
   smoke:
-    needs: deploy_preview
+    needs: [preflight, deploy_preview]
+    if: needs.preflight.outputs.can_deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -69,8 +92,8 @@ jobs:
         run: bash scripts/smoke.sh
 
   promote:
-    needs: smoke
-    if: github.ref == 'refs/heads/main'
+    needs: [preflight, deploy_preview, smoke]
+    if: github.ref == 'refs/heads/main' && needs.preflight.outputs.can_deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -85,3 +108,13 @@ jobs:
         run: npx vercel promote "https://${{ needs.deploy_preview.outputs.url }}" \
           --token ${{ secrets.VERCEL_TOKEN }} \
           --scope ${{ secrets.VERCEL_TEAM_ID || secrets.VERCEL_ORG_ID }}
+
+  deploy_skipped_notice:
+    needs: preflight
+    if: needs.preflight.outputs.can_deploy != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain skip condition
+        run: |
+          echo "Preview deploy skipped: ${{ needs.preflight.outputs.reason }}"
+          echo "Set VERCEL_TOKEN and VERCEL_ORG_ID secrets to enable deploy/smoke/promote."

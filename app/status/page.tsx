@@ -3,6 +3,8 @@ import { Footer } from "@/components/footer"
 import { CheckCircle2, AlertTriangle, Clock, Database } from "lucide-react"
 import { getMarketPulse } from "@/lib/decision-infrastructure"
 
+export const dynamic = "force-dynamic"
+
 const services = [
   {
     name: "Market data feed",
@@ -46,17 +48,26 @@ const incidents = [
 ]
 
 async function getSnapshotSummary() {
-  const pulse = await getMarketPulse()
-  const summary = pulse.summary as Record<string, unknown> | null
-  const projects = typeof summary?.projects === "number" ? summary.projects : null
-  const highConfidence = pulse.confidence_distribution.find((item) => String(item.label ?? "").toUpperCase() === "HIGH")
-  const buySignals = pulse.timing_signals.find((item) => String(item.label ?? "").toUpperCase() === "BUY")
+  try {
+    const pulse = await getMarketPulse()
+    const summary = pulse.summary as Record<string, unknown> | null
+    const projects = typeof summary?.projects === "number" ? summary.projects : null
+    const highConfidence = pulse.confidence_distribution.find((item) => String(item.label ?? "").toUpperCase() === "HIGH")
+    const buySignals = pulse.timing_signals.find((item) => String(item.label ?? "").toUpperCase() === "BUY")
 
-  return {
-    generated: pulse.data_as_of,
-    masterCount: projects,
-    mediaCount: highConfidence?.count ?? null,
-    scoredCount: buySignals?.count ?? null,
+    return {
+      generated: pulse.data_as_of,
+      masterCount: projects,
+      mediaCount: buySignals?.count ?? null,
+      scoredCount: highConfidence?.count ?? null,
+    }
+  } catch {
+    return {
+      generated: null,
+      masterCount: null,
+      mediaCount: null,
+      scoredCount: null,
+    }
   }
 }
 
