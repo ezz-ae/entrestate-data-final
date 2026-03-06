@@ -27,9 +27,15 @@ export default async function AreasPage() {
               slug={String(area.slug)}
               area={String(area.area ?? "Area")}
               projects={typeof area.projects === "number" ? area.projects : null}
+              city={typeof area.city === "string" ? area.city : null}
               avg_price={typeof area.avg_price === "number" ? area.avg_price : null}
               avg_yield={typeof area.avg_yield === "number" ? area.avg_yield : null}
               image_url={typeof area.image_url === "string" ? area.image_url : null}
+              top_projects={
+                Array.isArray(area.top_projects)
+                  ? area.top_projects.filter((item): item is string => typeof item === "string")
+                  : null
+              }
             />
           ))}
         </section>
@@ -38,4 +44,3 @@ export default async function AreasPage() {
     </main>
   )
 }
-

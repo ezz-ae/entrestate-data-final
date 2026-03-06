@@ -30,6 +30,16 @@ export default async function DevelopersPage() {
               reliability={typeof developer.reliability === "number" ? developer.reliability : null}
               avg_price={typeof developer.avg_price === "number" ? developer.avg_price : null}
               logo_url={typeof developer.logo_url === "string" ? developer.logo_url : null}
+              top_areas={
+                Array.isArray(developer.top_areas)
+                  ? developer.top_areas.filter((item): item is string => typeof item === "string")
+                  : null
+              }
+              top_projects={
+                Array.isArray(developer.top_projects)
+                  ? developer.top_projects.filter((item): item is string => typeof item === "string")
+                  : null
+              }
             />
           ))}
         </section>
@@ -38,4 +48,3 @@ export default async function DevelopersPage() {
     </main>
   )
 }
-

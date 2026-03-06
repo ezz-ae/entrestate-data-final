@@ -7,6 +7,14 @@ import { getDeveloperBySlug } from "@/lib/decision-infrastructure"
 
 export const dynamic = "force-dynamic"
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
 export default async function DeveloperDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const detail = await getDeveloperBySlug(slug)
@@ -19,7 +27,10 @@ export default async function DeveloperDetailPage({ params }: { params: Promise<
     <main id="main-content">
       <Navbar />
       <div className="mx-auto max-w-[1400px] px-6 pb-20 pt-28 md:pt-36">
-        <header className="rounded-2xl border border-border/70 bg-card/70 p-6">
+        <header className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-6">
+          <div className="pointer-events-none absolute inset-0 rounded-2xl border border-primary/25" />
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(680px_circle_at_50%_-280px,rgba(59,130,246,0.2),transparent_58%)] opacity-80" />
+
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Developer Detail</p>
           <h1 className="mt-2 text-3xl font-semibold text-foreground md:text-5xl">{String(developer.developer ?? "Developer")}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -27,23 +38,23 @@ export default async function DeveloperDetailPage({ params }: { params: Promise<
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5">
-            <div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-xs text-muted-foreground">Reliability</p>
               <p className="font-medium text-foreground">{formatScore(developer.reliability)}</p>
             </div>
-            <div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-xs text-muted-foreground">Efficiency</p>
               <p className="font-medium text-foreground">{formatScore(developer.efficiency)}</p>
             </div>
-            <div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-xs text-muted-foreground">Projects</p>
               <p className="font-medium text-foreground">{String(developer.projects ?? "—")}</p>
             </div>
-            <div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-xs text-muted-foreground">Safe projects</p>
               <p className="font-medium text-foreground">{String(developer.safe_projects ?? "—")}</p>
             </div>
-            <div>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3">
               <p className="text-xs text-muted-foreground">Avg ticket</p>
               <p className="font-medium text-foreground">{formatAed(developer.avg_price)}</p>
             </div>
@@ -51,7 +62,8 @@ export default async function DeveloperDetailPage({ params }: { params: Promise<
         </header>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+          <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+            <div className="pointer-events-none absolute inset-0 rounded-2xl border border-primary/20" />
             <h2 className="text-lg font-semibold text-foreground">Projects</h2>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               {detail.projects.map((project) => (
@@ -74,16 +86,34 @@ export default async function DeveloperDetailPage({ params }: { params: Promise<
             </div>
           </div>
 
-          <aside className="rounded-2xl border border-border/70 bg-card/70 p-4">
+          <aside className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+            <div className="pointer-events-none absolute inset-0 rounded-2xl border border-primary/20" />
             <h2 className="text-lg font-semibold text-foreground">Area presence</h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {detail.area_presence.map((area, index) => (
-                <li key={`${String(area.area)}-${index}`} className="flex items-center justify-between">
-                  <span>{String(area.area ?? "Area")}</span>
-                  <span>{String(area.projects ?? "—")}</span>
+                <li
+                  key={`${String(area.area)}-${index}`}
+                  className="flex items-center justify-between rounded-lg border border-border/50 bg-background/50 px-3 py-2"
+                >
+                  <a
+                    href={`/areas/${slugify(String(area.area ?? "area"))}`}
+                    className="truncate pr-3 text-foreground transition hover:text-primary"
+                  >
+                    {String(area.area ?? "Area")}
+                  </a>
+                  <span className="text-xs text-muted-foreground">{String(area.projects ?? "—")}</span>
                 </li>
               ))}
             </ul>
+
+            {profile ? (
+              <div className="mt-4 rounded-xl border border-border/50 bg-background/50 p-3 text-xs text-muted-foreground">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Profile notes</p>
+                <p className="mt-1 text-sm text-foreground">
+                  {[profile?.footprint, profile?.continuity].filter(Boolean).join(" · ") || "Operational footprint available"}
+                </p>
+              </div>
+            ) : null}
           </aside>
         </section>
       </div>
@@ -91,4 +121,3 @@ export default async function DeveloperDetailPage({ params }: { params: Promise<
     </main>
   )
 }
-

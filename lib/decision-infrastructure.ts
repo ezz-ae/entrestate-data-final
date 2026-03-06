@@ -338,6 +338,7 @@ export async function listAreas(): Promise<{
   const rows = await runQuery(Prisma.sql`
     SELECT
       COALESCE(final_area, area) AS area,
+      MODE() WITHIN GROUP (ORDER BY city) AS city,
       COUNT(*)::int AS projects,
       ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0)) AS avg_price,
       ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
@@ -362,15 +363,44 @@ export async function listAreas(): Promise<{
     profiles.map((profile) => [String(profile.area_name ?? "").toLowerCase(), profile]),
   )
 
+  const topProjectsRows = await runOptionalQuery<{ area: string; top_projects: string[] | null }>(Prisma.sql`
+    WITH ranked AS (
+      SELECT
+        COALESCE(final_area, area) AS area,
+        name,
+        ROW_NUMBER() OVER (
+          PARTITION BY COALESCE(final_area, area)
+          ORDER BY engine_god_metric DESC NULLS LAST
+        ) AS row_rank
+      FROM inventory_full
+      WHERE name IS NOT NULL
+    )
+    SELECT
+      area,
+      ARRAY_AGG(name ORDER BY row_rank) FILTER (WHERE row_rank <= 3) AS top_projects
+    FROM ranked
+    WHERE row_rank <= 3
+    GROUP BY area
+  `)
+
+  const topProjectsMap = new Map(
+    topProjectsRows.map((row) => [
+      String(row.area ?? "").toLowerCase(),
+      Array.isArray(row.top_projects) ? row.top_projects : [],
+    ]),
+  )
+
   return {
     data_as_of: new Date().toISOString(),
     areas: rows.map((row) => {
       const key = String(row.area ?? "").toLowerCase()
       const profile = profileMap.get(key)
+      const topProjects = topProjectsMap.get(key) ?? []
       return {
         ...row,
         image_url: profile?.image_url ?? null,
         area_type: profile?.area_type ?? null,
+        top_projects: topProjects,
         slug: slugifyName(String(row.area ?? "area")),
       }
     }),
@@ -483,16 +513,74 @@ export async function listDevelopers(): Promise<{
 
   const profileMap = new Map(profiles.map((profile) => [String(profile.name ?? "").toLowerCase(), profile]))
 
+  const topAreasRows = await runOptionalQuery<{ developer: string; top_areas: string[] | null }>(Prisma.sql`
+    WITH ranked AS (
+      SELECT
+        developer,
+        COALESCE(final_area, area) AS area,
+        COUNT(*)::int AS projects,
+        ROW_NUMBER() OVER (
+          PARTITION BY developer
+          ORDER BY COUNT(*) DESC
+        ) AS row_rank
+      FROM inventory_full
+      WHERE developer IS NOT NULL
+      GROUP BY 1, 2
+    )
+    SELECT
+      developer,
+      ARRAY_AGG(area ORDER BY row_rank) FILTER (WHERE row_rank <= 3) AS top_areas
+    FROM ranked
+    WHERE row_rank <= 3
+    GROUP BY 1
+  `)
+
+  const topProjectsRows = await runOptionalQuery<{ developer: string; top_projects: string[] | null }>(Prisma.sql`
+    WITH ranked AS (
+      SELECT
+        developer,
+        name,
+        ROW_NUMBER() OVER (
+          PARTITION BY developer
+          ORDER BY engine_god_metric DESC NULLS LAST
+        ) AS row_rank
+      FROM inventory_full
+      WHERE developer IS NOT NULL
+        AND name IS NOT NULL
+    )
+    SELECT
+      developer,
+      ARRAY_AGG(name ORDER BY row_rank) FILTER (WHERE row_rank <= 3) AS top_projects
+    FROM ranked
+    WHERE row_rank <= 3
+    GROUP BY 1
+  `)
+
+  const topAreasMap = new Map(
+    topAreasRows.map((row) => [String(row.developer ?? "").toLowerCase(), Array.isArray(row.top_areas) ? row.top_areas : []]),
+  )
+
+  const topProjectsMap = new Map(
+    topProjectsRows.map((row) => [
+      String(row.developer ?? "").toLowerCase(),
+      Array.isArray(row.top_projects) ? row.top_projects : [],
+    ]),
+  )
+
   return {
     data_as_of: new Date().toISOString(),
     developers: rows.map((row) => {
       const key = String(row.developer ?? "").toLowerCase()
       const profile = profileMap.get(key)
+      const topAreas = topAreasMap.get(key) ?? []
+      const topProjects = topProjectsMap.get(key) ?? []
       return {
         ...row,
         logo_url: profile?.logo_url ?? null,
         founded_year: profile?.founded_year ?? null,
         hq: profile?.hq ?? null,
+        top_areas: topAreas,
+        top_projects: topProjects,
         slug: slugifyName(String(row.developer ?? "developer")),
       }
     }),

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { DefaultChatTransport } from "ai"
 import { useChat } from "@ai-sdk/react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 type EvidenceItem = {
   id: string
@@ -15,17 +15,8 @@ type EvidenceItem = {
 }
 
 type ChatInterfaceProps = {
-  initialTier?: "free" | "pro" | "team" | "institutional"
   initialDailyLimit?: number | null
-  initialUsedToday?: number
   initialRemaining?: number | null
-}
-
-function formatTierLabel(tier: ChatInterfaceProps["initialTier"]) {
-  if (tier === "institutional") return "Institutional"
-  if (tier === "team") return "Team"
-  if (tier === "pro") return "Pro"
-  return "Free"
 }
 
 function messageText(message: any): string {
@@ -83,16 +74,13 @@ function formatEvidenceLabel(toolName: string) {
 }
 
 export function ChatInterface({
-  initialTier = "free",
   initialDailyLimit = 3,
-  initialUsedToday = 0,
   initialRemaining = 3,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("")
-  const [tier, setTier] = useState<"free" | "pro" | "team" | "institutional">(initialTier)
   const [dailyLimit, setDailyLimit] = useState<number | null>(initialDailyLimit)
-  const [usedToday, setUsedToday] = useState(initialUsedToday)
   const [remaining, setRemaining] = useState<number | null>(initialRemaining)
+  const [limitMessage, setLimitMessage] = useState<string | null>(null)
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/copilot",
@@ -107,14 +95,11 @@ export function ChatInterface({
         const response = await fetch("/api/account/chat-usage", { cache: "no-store" })
         if (!response.ok) return
         const payload = (await response.json()) as {
-          tier?: "free" | "pro" | "team" | "institutional"
           usage?: { limit?: number | null; used?: number; remaining?: number | null }
         }
         if (cancelled) return
-        if (payload.tier) setTier(payload.tier)
         if (payload.usage) {
           setDailyLimit(payload.usage.limit ?? null)
-          setUsedToday(payload.usage.used ?? 0)
           setRemaining(payload.usage.remaining ?? null)
         }
       } catch {
@@ -129,15 +114,23 @@ export function ChatInterface({
   }, [])
 
   const chatBlocked = dailyLimit !== null && (remaining ?? 0) <= 0
+  const usageError = error?.message ?? ""
+  const isLimitError = usageError.includes("429") || usageError.toLowerCase().includes("daily limit")
+  const submitBlocked = status !== "ready" || input.trim().length === 0
 
   const submitMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const value = input.trim()
-    if (!value || status !== "ready" || chatBlocked) return
+    if (!value || status !== "ready") return
+    if (chatBlocked) {
+      setLimitMessage("You have finished your daily limit for your current plan. Subscribe to continue.")
+      return
+    }
+
+    setLimitMessage(null)
     await sendMessage({ text: value })
 
     if (dailyLimit !== null) {
-      setUsedToday((prev) => prev + 1)
       setRemaining((prev) => {
         const current = prev ?? dailyLimit
         return Math.max(current - 1, 0)
@@ -156,22 +149,11 @@ export function ChatInterface({
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <section className="rounded-2xl border border-border/70 bg-card/60 p-4">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Decision Tunnel</h2>
+          <h2 className="text-sm font-semibold text-foreground">Search</h2>
           <span className="text-xs text-muted-foreground">{status === "streaming" ? "Live" : "Ready"}</span>
         </div>
 
-        <div className="mb-4 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-          <p>
-            Tier: <span className="font-semibold text-foreground">{formatTierLabel(tier)}</span>
-          </p>
-          <p className="mt-1">
-            {dailyLimit === null
-              ? "Usage: Unlimited Decision Tunnel sessions."
-              : `Usage: ${usedToday}/${dailyLimit} sessions used today (${remaining ?? 0} remaining).`}
-          </p>
-        </div>
-
-        <div className="space-y-3">
+        <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">
           {(messages as any[]).map((message) => (
             <div
               key={message.id}
@@ -190,24 +172,33 @@ export function ChatInterface({
           ))}
         </div>
 
-        <form onSubmit={submitMessage} className="mt-4 flex gap-2">
-          <Input
+        <form onSubmit={submitMessage} className="mt-4 space-y-3">
+          <Textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask for project screening, price reality, area risk, or a full memo"
+            placeholder="Ask for project screening, price checks, area risk briefs, and full investor memos."
+            className="min-h-28 resize-y text-base"
           />
-          <Button type="submit" disabled={status !== "ready" || input.trim().length === 0 || chatBlocked}>
-            Send
-          </Button>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={submitBlocked} className="px-6">
+              Send
+            </Button>
+          </div>
         </form>
 
-        {chatBlocked ? (
+        {limitMessage ? (
           <p className="mt-3 text-sm text-amber-600">
-            Free plan daily limit reached. Upgrade to Pro for unlimited decision sessions.
+            {limitMessage} <a href="/pricing" className="underline">Subscribe</a>
           </p>
         ) : null}
 
-        {error ? <p className="mt-3 text-sm text-red-500">{error.message}</p> : null}
+        {isLimitError ? (
+          <p className="mt-3 text-sm text-amber-600">
+            You have finished your daily limit for your current plan. <a href="/pricing" className="underline">Subscribe</a>
+          </p>
+        ) : null}
+
+        {error && !isLimitError ? <p className="mt-3 text-sm text-red-500">{error.message}</p> : null}
       </section>
 
       <aside className="rounded-2xl border border-border/70 bg-card/60 p-4">

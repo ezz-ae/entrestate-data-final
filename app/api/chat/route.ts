@@ -1,10 +1,36 @@
 import { NextResponse } from "next/server"
+import { generateText, tool } from "ai"
 import { z } from "zod"
 import { getPublicErrorMessage, getRequestId } from "@/lib/api-errors"
-import { getEntrestateRows } from "@/lib/daas/data"
-import { average, countBy, priceValue, resolveColumns, toStringValue } from "@/lib/daas/engine"
-import { runAgent } from "@/lib/notebook-agent/runtime"
-import { getLatestNotebookProvenance } from "@/lib/notebook-provenance"
+import { resolveCopilotModel } from "@/lib/ai-provider"
+import { getCurrentEntitlement } from "@/lib/account-entitlement"
+import {
+  FREE_COPILOT_DAILY_LIMIT,
+  getAnonymousCopilotAccountKey,
+  incrementCopilotDailyUsage,
+} from "@/lib/copilot-usage"
+import {
+  executeAreaRiskBrief,
+  executeDealScreener,
+  executeDeveloperDueDiligence,
+  executeGenerateInvestorMemo,
+  executePriceRealityCheck,
+} from "@/lib/copilot/executor"
+import { collectGuardrailWarnings } from "@/lib/copilot/guardrails"
+import {
+  type AreaRiskBriefInput,
+  type DealScreenerInput,
+  type DeveloperDueDiligenceInput,
+  type GenerateInvestorMemoInput,
+  type PriceRealityCheckInput,
+  areaRiskBriefInputSchema,
+  copilotSystemPrompt,
+  copilotToolDescriptions,
+  dealScreenerInputSchema,
+  developerDueDiligenceInputSchema,
+  generateInvestorMemoInputSchema,
+  priceRealityCheckInputSchema,
+} from "@/lib/copilot/tools"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -13,7 +39,6 @@ const chatRequestSchema = z
   .object({
     intent: z.string().trim().min(1).max(500).optional(),
     message: z.string().trim().min(1).max(500).optional(),
-    userId: z.string().cuid().optional(),
     context: z
       .object({
         city: z.string().trim().min(1).max(120).optional(),
@@ -25,26 +50,6 @@ const chatRequestSchema = z
     message: "message or intent is required",
   })
 
-type ChatContext = {
-  city?: string
-  area?: string
-}
-
-type ChatCard = {
-  type: "stat" | "area" | "project"
-  title: string
-  value: string
-  subtitle?: string
-  trend?: "up" | "down" | "flat"
-  trendValue?: string
-}
-
-type MarketChatResponse = {
-  content: string
-  dataCards?: ChatCard[]
-  suggestions?: string[]
-}
-
 const defaultSuggestions = [
   "Studios under AED 800K in Business Bay",
   "Compare Dubai Marina vs JBR",
@@ -52,225 +57,147 @@ const defaultSuggestions = [
   "Projects in Abu Dhabi under AED 2M",
 ]
 
-const parseBudgetAed = (message: string): number | null => {
-  const match = message.match(/aed\s*([\d,.]+)\s*(k|m|mn|million)?/i)
-  if (!match) return null
-  const value = Number.parseFloat(match[1].replace(/,/g, ""))
-  if (!Number.isFinite(value)) return null
-  const unit = match[2]?.toLowerCase()
-  if (unit === "k") return value * 1_000
-  if (unit === "m" || unit === "mn" || unit === "million") return value * 1_000_000
-  return value
-}
-
-const pickBestMatch = (candidates: string[], message: string): string | null => {
-  const normalized = message.toLowerCase()
-  return candidates.find((candidate) => normalized.includes(candidate.toLowerCase())) ?? null
-}
-
-async function buildMarketChatResponse(message: string, context?: ChatContext): Promise<MarketChatResponse> {
-  const data = await Promise.race([
-    getEntrestateRows(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
-  ])
-
-  if (!data || !Array.isArray(data.rows)) {
-    return {
-      content: "I can help with screening, area comparisons, and pricing checks. Please try again in a moment.",
-      dataCards: [
-        {
-          type: "stat",
-          title: "Matches",
-          value: "0",
-          subtitle: "Data refresh in progress",
-        },
-      ],
-      suggestions: defaultSuggestions,
-    }
-  }
-
-  const { rows } = data
-  const columns = resolveColumns(rows)
-  const cityValues = columns.city
-    ? rows
-        .map((row) => toStringValue(row[columns.city]))
-        .filter((value): value is string => Boolean(value))
-    : []
-  const areaValues = columns.area
-    ? rows
-        .map((row) => toStringValue(row[columns.area]))
-        .filter((value): value is string => Boolean(value))
-    : []
-
-  const city = context?.city ?? pickBestMatch(Array.from(new Set(cityValues)), message)
-  const area = context?.area ?? pickBestMatch(Array.from(new Set(areaValues)), message)
-  const budgetMax = parseBudgetAed(message)
-
-  let filtered = rows
-  if (city && columns.city) {
-    filtered = filtered.filter((row) => toStringValue(row[columns.city])?.toLowerCase() === city.toLowerCase())
-  }
-  if (area && columns.area) {
-    filtered = filtered.filter((row) => toStringValue(row[columns.area])?.toLowerCase() === area.toLowerCase())
-  }
-  if (budgetMax && columns.priceFrom) {
-    filtered = filtered.filter((row) => {
-      const price = priceValue(row, columns)
-      return price === null ? false : price <= budgetMax
-    })
-  }
-
-  const prices = filtered
-    .map((row) => priceValue(row, columns))
-    .filter((value): value is number => value !== null)
-  const avgPrice = average(prices)
-  const areaCounts = countBy(
-    columns.area
-      ? filtered
-          .map((row) => toStringValue(row[columns.area]))
-          .filter((value): value is string => Boolean(value))
-      : [],
-  )
-  const topArea = areaCounts[0]?.label
-  const count = filtered.length
-
-  const content =
-    count > 0
-      ? `Found ${count.toLocaleString()} matching projects${area ? ` in ${area}` : ""}${
-          city && !area ? ` in ${city}` : ""
-        }.`
-      : "I could not find matching inventory for that request yet. Try adjusting the filters."
-
-  const dataCards: ChatCard[] = [
-    {
-      type: "stat",
-      title: "Matches",
-      value: count.toLocaleString(),
-      subtitle: city || area ? [city, area].filter(Boolean).join(" / ") : "All markets",
-    },
-    {
-      type: "stat",
-      title: "Average price",
-      value: avgPrice ? `AED ${Math.round(avgPrice).toLocaleString()}` : "-",
-      subtitle: "From live inventory",
-    },
-  ]
-
-  if (topArea) {
-    dataCards.push({
-      type: "area",
-      title: "Top area",
-      value: topArea,
-      subtitle: "Most frequent in results",
-    })
-  }
-
-  return { content, dataCards, suggestions: defaultSuggestions }
-}
-
-async function loadProvenance(requestId: string) {
-  try {
-    const record = await getLatestNotebookProvenance()
-    if (record?.run_id) return record
-  } catch {
-    // ignore provenance lookup errors
-  }
-
+function withGuardrails<T extends Record<string, unknown>>(output: T): T & { guardrail_warnings: string[] } {
+  const warnings = collectGuardrailWarnings(output)
   return {
-    run_id: requestId,
-    snapshot_ts: null,
-    sources_used: null,
-    exclusion_policy_version: null,
-    column_registry_version: null,
+    ...output,
+    guardrail_warnings: warnings,
   }
 }
 
-function buildCompilerOutput(message: string) {
-  const normalized = message.toLowerCase()
-  const isComplexQuery =
-    normalized.includes(" vs ") ||
-    normalized.includes("compare") ||
-    normalized.includes("built after") ||
-    normalized.includes(" and ")
+function buildUserPrompt(message: string, context?: { city?: string; area?: string }) {
+  const segments = [message.trim()]
 
-  const unitSignalRegex = /(high floor|seaview|sea view|\b1br\b|\b2br\b|\b3br\b|bedroom|bedrooms|floor)/i
-  const signals = [
-    {
-      signal: unitSignalRegex.test(message) ? "unit_distribution_signal" : "market_signal",
-      confidence: "medium",
-    },
-  ]
-
-  return {
-    output_type: isComplexQuery ? "partial_spec" : "table_spec",
-    table_spec: {
-      signals,
-    },
+  if (context?.city || context?.area) {
+    segments.push(
+      [
+        "Context:",
+        context.city ? `- City: ${context.city}` : null,
+        context.area ? `- Area: ${context.area}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
   }
+
+  return segments.join("\n\n")
 }
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request)
-  const provenance = await loadProvenance(requestId)
-  const evidence = {
-    sources_used: Array.isArray(provenance.sources_used)
-      ? provenance.sources_used
-      : ["inventory_full"],
-  }
+
   try {
     const body = await request.json()
     const parsed = chatRequestSchema.safeParse(body)
-
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid request payload.", requestId, request_id: requestId, provenance, evidence },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Invalid request payload.", requestId, request_id: requestId }, { status: 400 })
     }
-    
-    if (parsed.data.intent && parsed.data.userId) {
-      // This assumes you can get the user's ID from the session or request
-      const agentResponse = await runAgent(parsed.data.intent, parsed.data.userId)
-      const compilerOutput = buildCompilerOutput(parsed.data.intent)
+
+    const headerAccountKey = request.headers.get("x-entrestate-account-key")?.trim() || request.headers.get("x-entrestate-user-id")?.trim()
+    const entitlement = await getCurrentEntitlement(headerAccountKey)
+    const usageAccountKey = entitlement.accountKey || getAnonymousCopilotAccountKey(request)
+    const usage = await incrementCopilotDailyUsage(usageAccountKey, entitlement.tier)
+
+    if (entitlement.tier === "free" && usage.used > FREE_COPILOT_DAILY_LIMIT) {
       return NextResponse.json(
         {
-          ...agentResponse,
-          content: agentResponse.narrative,
-          dataCards: [],
+          error: "You have finished your daily limit for your current plan.",
+          upgrade_cta: {
+            label: "Subscribe to continue",
+            url: "/pricing",
+          },
+          tier: entitlement.tier,
+          usage,
           requestId,
           request_id: requestId,
-          provenance,
-          evidence,
-          compiler_output: compilerOutput,
         },
-        { status: 200 },
+        { status: 429 },
       )
     }
 
+    const model = resolveCopilotModel()
+    if (!model) {
+      throw new Error("Copilot model is not configured. Set GEMINI_KEY, AI_GATEWAY_API_KEY, or OPENAI_API_KEY.")
+    }
+
+    const toolset = {
+      deal_screener: tool({
+        description: copilotToolDescriptions.deal_screener,
+        inputSchema: dealScreenerInputSchema,
+        execute: async (input: DealScreenerInput) => withGuardrails(await executeDealScreener(input)),
+      }),
+      price_reality_check: tool({
+        description: copilotToolDescriptions.price_reality_check,
+        inputSchema: priceRealityCheckInputSchema,
+        execute: async (input: PriceRealityCheckInput) => withGuardrails(await executePriceRealityCheck(input)),
+      }),
+      area_risk_brief: tool({
+        description: copilotToolDescriptions.area_risk_brief,
+        inputSchema: areaRiskBriefInputSchema,
+        execute: async (input: AreaRiskBriefInput) => withGuardrails(await executeAreaRiskBrief(input)),
+      }),
+      developer_due_diligence: tool({
+        description: copilotToolDescriptions.developer_due_diligence,
+        inputSchema: developerDueDiligenceInputSchema,
+        execute: async (input: DeveloperDueDiligenceInput) =>
+          withGuardrails(await executeDeveloperDueDiligence(input)),
+      }),
+      generate_investor_memo: tool({
+        description: copilotToolDescriptions.generate_investor_memo,
+        inputSchema: generateInvestorMemoInputSchema,
+        execute: async (input: GenerateInvestorMemoInput) => withGuardrails(await executeGenerateInvestorMemo(input)),
+      }),
+    } as const
+
     const message = parsed.data.message ?? parsed.data.intent ?? ""
-    const marketResponse = await buildMarketChatResponse(message, parsed.data.context)
-    const compilerOutput = buildCompilerOutput(message)
+    const prompt = buildUserPrompt(message, parsed.data.context)
+
+    const response = await generateText({
+      model,
+      system: copilotSystemPrompt,
+      prompt,
+      temperature: 0,
+      maxSteps: 6,
+      toolChoice: "auto",
+      tools: toolset,
+    })
+
+    const text = response.text.trim()
+    const toolResults = ((response as { toolResults?: Array<{ result?: unknown }> }).toolResults ?? [])
+      .map((entry) => entry.result)
+      .filter((entry) => entry !== undefined)
+    const synthesizedSummary = toolResults.length > 0 ? JSON.stringify(toolResults[toolResults.length - 1]).slice(0, 1200) : ""
+    const content = text.length > 0
+      ? text
+      : synthesizedSummary.length > 0
+        ? `The data shows: ${synthesizedSummary}`
+        : "No matching projects found."
 
     return NextResponse.json(
       {
-        ...marketResponse,
+        content,
+        suggestions: defaultSuggestions,
         requestId,
         request_id: requestId,
-        provenance,
-        evidence,
-        compiler_output: compilerOutput,
+        usage,
       },
-      { status: 200 },
+      {
+        status: 200,
+        headers: {
+          "x-request-id": requestId,
+          "x-copilot-usage-used": String(usage.used),
+          "x-copilot-usage-limit": usage.limit === null ? "unlimited" : String(usage.limit),
+          "x-copilot-usage-remaining": usage.remaining === null ? "unlimited" : String(usage.remaining),
+        },
+      },
     )
   } catch (error) {
-    console.error("Chat agent error:", { requestId, error })
+    console.error("Chat route error:", { requestId, error })
     return NextResponse.json(
       {
-        error: getPublicErrorMessage(error, "The agent failed to process your request."),
+        error: getPublicErrorMessage(error, "The assistant failed to process your request."),
         requestId,
         request_id: requestId,
-        provenance,
-        evidence,
       },
       { status: 500 },
     )

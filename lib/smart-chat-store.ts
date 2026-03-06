@@ -122,7 +122,19 @@ async function fetchChatResponse(
   })
 
   if (!res.ok) {
-    throw new Error("Chat request failed")
+    let errorMessage = "Chat request failed"
+    try {
+      const payload = (await res.json()) as { error?: string }
+      if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+        errorMessage = payload.error
+      }
+    } catch {
+      // ignore parse errors
+    }
+
+    const error = new Error(errorMessage) as Error & { status?: number }
+    error.status = res.status
+    throw error
   }
 
   return res.json()
@@ -157,11 +169,15 @@ export async function sendSmartChatMessage(options: {
       suggestions: response.suggestions ?? options.quickSuggestions.slice(0, 3),
     }
     setSmartChatMessages((prev) => [...prev, assistantMessage])
-  } catch {
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status
+    const isLimitError = status === 429
     const assistantMessage: SmartChatMessage = {
       id: `assistant-${Date.now()}`,
       role: "assistant",
-      content: "I could not reach the live market feed just now. Please try again or adjust the request.",
+      content: isLimitError
+        ? "You have finished your daily limit for your current plan. Subscribe to continue: /pricing"
+        : "I could not process this request right now. Please try again.",
       timestamp: new Date().toISOString(),
       suggestions: options.quickSuggestions.slice(0, 3),
     }

@@ -75,7 +75,11 @@ export async function POST(request: Request) {
     if (entitlement.tier === "free" && usage.used > FREE_COPILOT_DAILY_LIMIT) {
       return NextResponse.json(
         {
-          error: "Daily free chat limit reached (3/day). Upgrade to Pro for unlimited chat.",
+          error: "You have finished your daily limit for your current plan.",
+          upgrade_cta: {
+            label: "Subscribe to continue",
+            url: "/pricing",
+          },
           tier: entitlement.tier,
           usage,
           requestId,

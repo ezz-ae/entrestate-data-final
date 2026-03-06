@@ -14,7 +14,8 @@ export function EvidenceDrawer({ sources, exclusions, assumptions, title = "Evid
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+    <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+      <div className="pointer-events-none absolute inset-0 rounded-2xl border border-primary/20" />
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <Button variant="outline" size="sm" onClick={() => setOpen((prev) => !prev)}>
@@ -26,19 +27,18 @@ export function EvidenceDrawer({ sources, exclusions, assumptions, title = "Evid
         <div className="mt-3 space-y-3 text-xs text-muted-foreground">
           <div>
             <p className="font-medium text-foreground">Sources</p>
-            <pre className="mt-1 overflow-auto rounded-lg bg-background/70 p-2">{JSON.stringify(sources ?? [], null, 2)}</pre>
+            <pre className="mt-1 overflow-auto rounded-lg border border-border/50 bg-background/70 p-2">{JSON.stringify(sources ?? [], null, 2)}</pre>
           </div>
           <div>
             <p className="font-medium text-foreground">Exclusions</p>
-            <pre className="mt-1 overflow-auto rounded-lg bg-background/70 p-2">{JSON.stringify(exclusions ?? [], null, 2)}</pre>
+            <pre className="mt-1 overflow-auto rounded-lg border border-border/50 bg-background/70 p-2">{JSON.stringify(exclusions ?? [], null, 2)}</pre>
           </div>
           <div>
             <p className="font-medium text-foreground">Assumptions</p>
-            <pre className="mt-1 overflow-auto rounded-lg bg-background/70 p-2">{JSON.stringify(assumptions ?? [], null, 2)}</pre>
+            <pre className="mt-1 overflow-auto rounded-lg border border-border/50 bg-background/70 p-2">{JSON.stringify(assumptions ?? [], null, 2)}</pre>
           </div>
         </div>
       ) : null}
     </div>
   )
 }
-

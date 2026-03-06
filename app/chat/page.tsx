@@ -27,19 +27,13 @@ export default async function ChatPage({
       <Navbar />
       <div className="mx-auto max-w-[1400px] px-6 pb-20 pt-28 md:pt-36">
         <header className="mb-6">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Decision Tunnel</p>
-          <h1 className="mt-2 text-3xl font-semibold text-foreground md:text-5xl">Decision Tunnel + Evidence</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Ask for project screening, price checks, area risk briefs, and full investor memos.
-          </p>
+          <h1 className="text-3xl font-semibold text-foreground md:text-5xl">Search for anything Rel estate</h1>
           {billingParam === "success" ? (
             <p className="mt-2 text-sm text-emerald-600">Subscription activated. Your new tier is syncing now.</p>
           ) : null}
         </header>
         <ChatInterface
-          initialTier={entitlement.tier}
           initialDailyLimit={usage.limit}
-          initialUsedToday={usage.used}
           initialRemaining={usage.remaining}
         />
       </div>
