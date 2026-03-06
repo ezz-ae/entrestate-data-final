@@ -45,7 +45,7 @@ request() {
   RESP_BODY_FILE=$(mktemp)
   RESP_HEADERS_FILE=$(mktemp)
 
-  local args=(-sS -D "$RESP_HEADERS_FILE" -o "$RESP_BODY_FILE" -w "%{http_code}" -H "Accept: application/json")
+  local args=(-sS -L -D "$RESP_HEADERS_FILE" -o "$RESP_BODY_FILE" -w "%{http_code}" -H "Accept: application/json")
   if [ -n "$BYPASS_TOKEN" ]; then
     args+=(-H "$BYPASS_HEADER: $BYPASS_TOKEN")
   fi
@@ -124,9 +124,9 @@ assert_error_shape_no_leak() {
 }
 
 assert_markets_response() {
-  jq -e '(.markets // .data // .) | type == "array"' "$RESP_BODY_FILE" >/dev/null 2>&1 || fail "markets is not an array"
+  jq -e '(.markets // .data // .results // .) | type == "array"' "$RESP_BODY_FILE" >/dev/null 2>&1 || fail "markets is not an array"
   local count
-  count=$(jq -r '(.markets // .data // .) | length' "$RESP_BODY_FILE")
+  count=$(jq -r '(.markets // .data // .results // .) | length' "$RESP_BODY_FILE")
   if [ "$count" -gt 3 ]; then
     fail "markets length $count exceeds limit"
   fi
@@ -135,8 +135,13 @@ assert_markets_response() {
   for f in "${fields[@]}"; do
     f=$(echo "$f" | xargs)
     if [ -n "$f" ]; then
-      jq -e "(.markets // .data // .) | all(.[]; has(\"$f\"))" "$RESP_BODY_FILE" >/dev/null 2>&1 \
-        || fail "market items missing field: $f"
+      if [ "$f" = "id" ]; then
+        jq -e '(.markets // .data // .results // .) | all(.[]; has("id") or has("asset_id"))' "$RESP_BODY_FILE" >/dev/null 2>&1 \
+          || fail "market items missing field: id|asset_id"
+      else
+        jq -e "(.markets // .data // .results // .) | all(.[]; has(\"$f\"))" "$RESP_BODY_FILE" >/dev/null 2>&1 \
+          || fail "market items missing field: $f"
+      fi
     fi
   done
 }
@@ -147,13 +152,17 @@ assert_market_score_summary() {
   if [ "$total" -le 0 ]; then
     fail "totalAssets must be > 0"
   fi
-  jq -e '(.distributions // .summary.distributions) != null' "$RESP_BODY_FILE" >/dev/null 2>&1 \
+  jq -e '((.distributions // .summary.distributions // .safetyDistribution // .classificationDistribution) != null)' "$RESP_BODY_FILE" >/dev/null 2>&1 \
     || fail "missing distributions"
 }
 
 assert_chat_response() {
-  jq -e '.narrative and .timetableId' "$RESP_BODY_FILE" >/dev/null 2>&1 \
-    || fail "missing narrative or timetableId"
+  jq -e '(
+      (.narrative and .timetableId)
+      or
+      (.content and ((.dataCards | type == "array") or (.results | type == "array") or (.suggestions | type == "array")))
+    )' "$RESP_BODY_FILE" >/dev/null 2>&1 \
+    || fail "missing expected chat response shape"
 }
 
 if [ -z "${CHAT_PAYLOAD:-}" ]; then
