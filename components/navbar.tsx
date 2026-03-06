@@ -10,7 +10,7 @@ import { MarketPulsePopover } from "@/components/market-pulse-popover"
 import { SmartChat } from "@/components/smart-chat"
 
 const navLinks = [
-  { label: "Decision Tunnel", href: "/chat" },
+  { label: "Chat", href: "/chat" },
   { label: "Properties", href: "/properties" },
   { label: "Areas", href: "/areas" },
   { label: "Developers", href: "/developers" },

@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react"
 
 const footerLinks = {
   Explore: [
-    { label: "Decision Tunnel", href: "/chat" },
+    { label: "Chat", href: "/chat" },
     { label: "Properties", href: "/properties" },
     { label: "Areas", href: "/areas" },
     { label: "Developers", href: "/developers" },
@@ -57,7 +57,7 @@ export function Footer() {
                 href="/chat"
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                Open Decision Tunnel
+                Open Chat
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link

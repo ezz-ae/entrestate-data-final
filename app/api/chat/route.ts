@@ -57,6 +57,21 @@ const defaultSuggestions = [
   "Projects in Abu Dhabi under AED 2M",
 ]
 
+type ChatCard = {
+  type: "stat" | "area" | "project"
+  title: string
+  value: string
+  subtitle?: string
+}
+
+type ToolResultEnvelope = {
+  source?: unknown
+  rows?: unknown
+  count?: unknown
+  data_as_of?: unknown
+  guardrail_warnings?: unknown
+}
+
 function withGuardrails<T extends Record<string, unknown>>(output: T): T & { guardrail_warnings: string[] } {
   const warnings = collectGuardrailWarnings(output)
   return {
@@ -81,6 +96,236 @@ function buildUserPrompt(message: string, context?: { city?: string; area?: stri
   }
 
   return segments.join("\n\n")
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function toRows(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => toRecord(entry)).filter((entry): entry is Record<string, unknown> => Boolean(entry))
+}
+
+function formatAed(value: number) {
+  return `AED ${Math.round(value).toLocaleString()}`
+}
+
+function parseBudgetAed(message: string): number | null {
+  const budgetMatch = message.match(/\b(?:under|below|max|budget)\s*(?:aed\s*)?([\d,.]+)\s*(k|m|mn|million)?\b/i)
+  const generalMatch = message.match(/\baed\s*([\d,.]+)\s*(k|m|mn|million)?\b/i)
+  const match = budgetMatch ?? generalMatch
+  if (!match) return null
+  const value = Number.parseFloat(match[1].replace(/,/g, ""))
+  if (!Number.isFinite(value)) return null
+  const unit = match[2]?.toLowerCase()
+  if (unit === "k") return value * 1_000
+  if (unit === "m" || unit === "mn" || unit === "million") return value * 1_000_000
+  return value
+}
+
+function parseBedsFromMessage(message: string): number | null {
+  const bedMatch = message.match(/\b(\d+)\s*(?:br|bed|beds|bedroom|bedrooms)\b/i)
+  if (!bedMatch) return null
+  const beds = Number.parseInt(bedMatch[1], 10)
+  return Number.isFinite(beds) ? beds : null
+}
+
+function parseTimingSignal(message: string): "BUY" | "HOLD" | "WAIT" | undefined {
+  const normalized = message.toLowerCase()
+  if (normalized.includes("buy")) return "BUY"
+  if (normalized.includes("hold")) return "HOLD"
+  if (normalized.includes("wait")) return "WAIT"
+  return undefined
+}
+
+function collectSources(toolResults: unknown[]): string[] {
+  const sources = new Set<string>(["inventory_full"])
+  for (const result of toolResults) {
+    const record = toRecord(result) as ToolResultEnvelope | null
+    const source = typeof record?.source === "string" ? record.source.trim() : ""
+    if (source.length > 0) {
+      sources.add(source)
+    }
+  }
+  return [...sources]
+}
+
+function collectToolWarnings(toolResults: unknown[]): string[] {
+  const warnings = new Set<string>()
+
+  for (const result of toolResults) {
+    const record = toRecord(result) as ToolResultEnvelope | null
+    if (!record) continue
+    const list = Array.isArray(record.guardrail_warnings) ? record.guardrail_warnings : []
+    for (const entry of list) {
+      if (typeof entry === "string" && entry.trim().length > 0) {
+        warnings.add(entry)
+      }
+    }
+  }
+
+  return [...warnings]
+}
+
+function resolveDataAsOf(toolResults: unknown[]): string {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const record = toRecord(toolResults[index]) as ToolResultEnvelope | null
+    if (!record) continue
+    if (typeof record.data_as_of === "string" && record.data_as_of.trim().length > 0) {
+      return record.data_as_of
+    }
+  }
+  return new Date().toISOString()
+}
+
+function buildDataCardsFromRows(rows: Record<string, unknown>[]): ChatCard[] {
+  if (rows.length === 0) {
+    return [
+      {
+        type: "stat",
+        title: "Matches",
+        value: "0",
+        subtitle: "No matching projects found",
+      },
+    ]
+  }
+
+  const prices = rows
+    .map((row) => toFiniteNumber(row.l1_canonical_price))
+    .filter((value): value is number => value !== null && value > 0)
+
+  const areaFrequency = new Map<string, number>()
+  for (const row of rows) {
+    const areaValue = typeof row.final_area === "string" && row.final_area.trim().length > 0
+      ? row.final_area
+      : typeof row.area === "string"
+        ? row.area
+        : ""
+    const key = areaValue.trim()
+    if (!key) continue
+    areaFrequency.set(key, (areaFrequency.get(key) ?? 0) + 1)
+  }
+
+  const topArea = [...areaFrequency.entries()].sort((left, right) => right[1] - left[1])[0]?.[0]
+  const avgPrice = prices.length > 0 ? prices.reduce((sum, value) => sum + value, 0) / prices.length : null
+
+  const cards: ChatCard[] = [
+    {
+      type: "stat",
+      title: "Matches",
+      value: rows.length.toLocaleString(),
+      subtitle: "From live inventory",
+    },
+  ]
+
+  cards.push({
+    type: "stat",
+    title: "Average price",
+    value: avgPrice === null ? "-" : formatAed(avgPrice),
+    subtitle: "From matching inventory",
+  })
+
+  if (topArea) {
+    cards.push({
+      type: "area",
+      title: "Top area",
+      value: topArea,
+      subtitle: "Most frequent in results",
+    })
+  }
+
+  return cards
+}
+
+function extractRowsFromToolResults(toolResults: unknown[]): Record<string, unknown>[] {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const record = toRecord(toolResults[index]) as ToolResultEnvelope | null
+    if (!record) continue
+    const rows = toRows(record.rows)
+    if (rows.length > 0) return rows
+  }
+  return []
+}
+
+function buildCompilerOutput(message: string) {
+  const normalized = message.toLowerCase()
+  const isComplexQuery =
+    normalized.includes(" vs ") ||
+    normalized.includes("compare") ||
+    normalized.includes("built after") ||
+    normalized.includes(" and ")
+
+  const unitSignalRegex = /(high floor|seaview|sea view|\b1br\b|\b2br\b|\b3br\b|bedroom|bedrooms|floor)/i
+  const signals = [
+    {
+      signal: unitSignalRegex.test(message) ? "unit_distribution_signal" : "market_signal",
+      confidence: "medium",
+    },
+  ]
+
+  return {
+    output_type: isComplexQuery ? "partial_spec" : "table_spec",
+    table_spec: {
+      signals,
+    },
+  }
+}
+
+function buildUsageHeaders(usage: { used: number; limit: number | null; remaining: number | null }) {
+  return {
+    "x-copilot-usage-used": String(usage.used),
+    "x-copilot-usage-limit": usage.limit === null ? "unlimited" : String(usage.limit),
+    "x-copilot-usage-remaining": usage.remaining === null ? "unlimited" : String(usage.remaining),
+  }
+}
+
+async function buildDeterministicFallback(message: string, context?: { city?: string; area?: string }) {
+  const budgetMax = parseBudgetAed(message)
+  const beds = parseBedsFromMessage(message)
+  const timingSignal = parseTimingSignal(message)
+
+  const filters: DealScreenerInput["filters"] = {}
+  if (context?.area) filters.area = context.area
+  if (typeof budgetMax === "number") filters.budget_max_aed = budgetMax
+  if (typeof beds === "number") {
+    filters.beds_min = beds
+    filters.beds_max = beds
+  }
+  if (timingSignal) filters.timing_signal = timingSignal
+
+  const result = await executeDealScreener({
+    filters,
+    sort_by: "engine_god_metric",
+    limit: 8,
+  })
+
+  const rows = toRows(result.rows)
+  const cards = buildDataCardsFromRows(rows)
+
+  const leadArea = cards.find((card) => card.type === "area")?.value
+  const content = rows.length > 0
+    ? `The data shows ${rows.length.toLocaleString()} matching projects${leadArea ? `, led by ${leadArea}` : ""}.`
+    : "No matching projects found."
+
+  return {
+    content,
+    dataCards: cards,
+    evidence: {
+      sources_used: ["deal_screener", "inventory_full"],
+    },
+    data_as_of: result.data_as_of,
+  }
 }
 
 export async function POST(request: Request) {
@@ -116,9 +361,6 @@ export async function POST(request: Request) {
     }
 
     const model = resolveCopilotModel()
-    if (!model) {
-      throw new Error("Copilot model is not configured. Set GEMINI_KEY, AI_GATEWAY_API_KEY, or OPENAI_API_KEY.")
-    }
 
     const toolset = {
       deal_screener: tool({
@@ -152,45 +394,99 @@ export async function POST(request: Request) {
     const message = parsed.data.message ?? parsed.data.intent ?? ""
     const prompt = buildUserPrompt(message, parsed.data.context)
 
-    const response = await generateText({
-      model,
-      system: copilotSystemPrompt,
-      prompt,
-      temperature: 0,
-      maxSteps: 6,
-      toolChoice: "auto",
-      tools: toolset,
-    })
-
-    const text = response.text.trim()
-    const toolResults = ((response as { toolResults?: Array<{ result?: unknown }> }).toolResults ?? [])
-      .map((entry) => entry.result)
-      .filter((entry) => entry !== undefined)
-    const synthesizedSummary = toolResults.length > 0 ? JSON.stringify(toolResults[toolResults.length - 1]).slice(0, 1200) : ""
-    const content = text.length > 0
-      ? text
-      : synthesizedSummary.length > 0
-        ? `The data shows: ${synthesizedSummary}`
-        : "No matching projects found."
-
-    return NextResponse.json(
-      {
-        content,
-        suggestions: defaultSuggestions,
-        requestId,
-        request_id: requestId,
-        usage,
-      },
-      {
-        status: 200,
-        headers: {
-          "x-request-id": requestId,
-          "x-copilot-usage-used": String(usage.used),
-          "x-copilot-usage-limit": usage.limit === null ? "unlimited" : String(usage.limit),
-          "x-copilot-usage-remaining": usage.remaining === null ? "unlimited" : String(usage.remaining),
+    if (!model) {
+      const fallback = await buildDeterministicFallback(message, parsed.data.context)
+      return NextResponse.json(
+        {
+          ...fallback,
+          warning: "Live model unavailable. Returned deterministic market response.",
+          suggestions: defaultSuggestions,
+          compiler_output: buildCompilerOutput(message),
+          requestId,
+          request_id: requestId,
+          usage,
         },
-      },
-    )
+        {
+          status: 200,
+          headers: {
+            "x-request-id": requestId,
+            ...buildUsageHeaders(usage),
+          },
+        },
+      )
+    }
+
+    try {
+      const response = await generateText({
+        model,
+        system: copilotSystemPrompt,
+        prompt,
+        temperature: 0,
+        maxSteps: 6,
+        toolChoice: "auto",
+        tools: toolset,
+      })
+
+      const text = response.text.trim()
+      const toolResults = ((response as { toolResults?: Array<{ result?: unknown }> }).toolResults ?? [])
+        .map((entry) => entry.result)
+        .filter((entry) => entry !== undefined)
+
+      const rows = extractRowsFromToolResults(toolResults)
+      const dataCards = rows.length > 0 ? buildDataCardsFromRows(rows) : undefined
+      const confidenceWarnings = collectToolWarnings(toolResults)
+      const toolSummary = toolResults.length > 0 ? JSON.stringify(toolResults[toolResults.length - 1]).slice(0, 1200) : ""
+      const content = text.length > 0
+        ? text
+        : toolSummary.length > 0
+          ? `The data shows: ${toolSummary}`
+          : "No matching projects found."
+
+      return NextResponse.json(
+        {
+          content,
+          dataCards,
+          suggestions: defaultSuggestions,
+          evidence: {
+            sources_used: collectSources(toolResults),
+            warnings: confidenceWarnings,
+          },
+          data_as_of: resolveDataAsOf(toolResults),
+          compiler_output: buildCompilerOutput(message),
+          requestId,
+          request_id: requestId,
+          usage,
+        },
+        {
+          status: 200,
+          headers: {
+            "x-request-id": requestId,
+            ...buildUsageHeaders(usage),
+          },
+        },
+      )
+    } catch (error) {
+      console.error("Chat route LLM execution failed:", { requestId, error })
+      const fallback = await buildDeterministicFallback(message, parsed.data.context)
+      return NextResponse.json(
+        {
+          ...fallback,
+          warning: "Live model unavailable. Returned deterministic market response.",
+          suggestions: defaultSuggestions,
+          compiler_output: buildCompilerOutput(message),
+          requestId,
+          request_id: requestId,
+          usage,
+        },
+        {
+          status: 200,
+          headers: {
+            "x-request-id": requestId,
+            ...buildUsageHeaders(usage),
+          },
+        },
+      )
+    }
   } catch (error) {
     console.error("Chat route error:", { requestId, error })
     return NextResponse.json(

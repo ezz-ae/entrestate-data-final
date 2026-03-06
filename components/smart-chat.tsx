@@ -102,6 +102,8 @@ export function SmartChat() {
   const isExplorer = pathname.startsWith("/markets")
   const hideSmartChat =
     isExplorer ||
+    pathname.startsWith("/chat") ||
+    pathname.startsWith("/copilot") ||
     pathname.startsWith("/top-data") ||
     pathname.startsWith("/workspace/data-scientist") ||
     pathname.startsWith("/apps/lead-agent")
