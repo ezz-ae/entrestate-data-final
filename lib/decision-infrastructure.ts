@@ -527,18 +527,29 @@ export async function listAreas(): Promise<{
   const rows = USE_CURATED_AREAS_VIEW
     ? await runQuery(Prisma.sql`
         SELECT
-          area,
-          NULL::text AS city,
-          total_projects::int AS projects,
-          avg_price,
-          avg_yield,
-          avg_investment_score AS efficiency,
+          t.area,
+          NULLIF(TRIM(COALESCE(t.city, '')), '') AS city,
+          COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) AS projects,
+          (to_jsonb(t) ->> 'avg_price')::numeric AS avg_price,
+          (to_jsonb(t) ->> 'avg_yield')::numeric AS avg_yield,
+          COALESCE(
+            (to_jsonb(t) ->> 'avg_investment_score')::numeric,
+            (to_jsonb(t) ->> 'avg_score')::numeric,
+            (to_jsonb(t) ->> 'efficiency')::numeric
+          ) AS efficiency,
           NULL::numeric AS supply_pressure,
-          CASE WHEN dominant_timing = 'BUY' THEN total_projects::int ELSE 0 END AS buy_signals
-        FROM ${AREAS_TABLE_SQL}
-        WHERE TRIM(COALESCE(area, '')) <> ''
-          AND COALESCE(total_projects, 0) >= 2
-        ORDER BY avg_investment_score DESC NULLS LAST
+          COALESCE(
+            (to_jsonb(t) ->> 'buy_signals')::int,
+            CASE WHEN UPPER(COALESCE(to_jsonb(t) ->> 'dominant_timing', '')) = 'BUY'
+              THEN COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0)
+              ELSE 0
+            END,
+            0
+          ) AS buy_signals
+        FROM ${AREAS_TABLE_SQL} t
+        WHERE TRIM(COALESCE(t.area, '')) <> ''
+          AND COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) >= 2
+        ORDER BY efficiency DESC NULLS LAST
       `)
     : await runQuery(Prisma.sql`
         SELECT
@@ -729,16 +740,48 @@ export async function listDevelopers(): Promise<{
   const rows = USE_CURATED_DEVELOPERS_VIEW
     ? await runQuery(Prisma.sql`
         SELECT
-          name AS developer,
-          total_projects::int AS projects,
-          avg_score AS reliability,
-          avg_score AS efficiency,
-          avg_price,
-          areas AS top_areas
-        FROM ${DEVELOPERS_TABLE_SQL}
-        WHERE TRIM(COALESCE(name, '')) <> ''
-          AND COALESCE(total_projects, 0) >= 2
-        ORDER BY avg_score DESC NULLS LAST
+          COALESCE(
+            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'name', '')), ''),
+            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'developer', '')), '')
+          ) AS developer,
+          COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) AS projects,
+          COALESCE(
+            (to_jsonb(t) ->> 'avg_score')::numeric,
+            (to_jsonb(t) ->> 'avg_quality')::numeric,
+            (to_jsonb(t) ->> 'reliability')::numeric
+          ) AS reliability,
+          COALESCE(
+            (to_jsonb(t) ->> 'avg_score')::numeric,
+            (to_jsonb(t) ->> 'avg_quality')::numeric,
+            (to_jsonb(t) ->> 'efficiency')::numeric
+          ) AS efficiency,
+          (to_jsonb(t) ->> 'avg_price')::numeric AS avg_price,
+          CASE
+            WHEN jsonb_typeof(COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas', '[]'::jsonb)) = 'array' THEN
+              ARRAY(
+                SELECT value
+                FROM jsonb_array_elements_text(
+                  COALESCE(
+                    to_jsonb(t) -> 'areas',
+                    to_jsonb(t) -> 'top_areas',
+                    '[]'::jsonb
+                  )
+                )
+              )
+            WHEN jsonb_typeof(COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas', '[]'::jsonb)) = 'string' THEN
+              regexp_split_to_array(
+                COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas') #>> '{}',
+                E' *, *'
+              )
+            ELSE ARRAY[]::text[]
+          END AS top_areas
+        FROM ${DEVELOPERS_TABLE_SQL} t
+        WHERE COALESCE(
+            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'name', '')), ''),
+            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'developer', '')), '')
+          ) IS NOT NULL
+          AND COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) >= 2
+        ORDER BY reliability DESC NULLS LAST
       `)
     : await runQuery(Prisma.sql`
         SELECT
