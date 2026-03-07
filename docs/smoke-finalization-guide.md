@@ -2,6 +2,18 @@
 
 This guide locks in automated smoke testing while keeping production SSO intact and the CI/CD pipeline clean. Use previews as your primary validation stage, only resorting to production bypass tokens when promotion flows are infeasible.
 
+## Quick Commands
+- Post-deploy endpoint smoke (developers, areas, market-score inventory, DB health):
+  - `pnpm run smoke:postdeploy -- --url https://your-deployment.vercel.app`
+- Enterprise write-path validation (seed + verify + cleanup):
+  - `pnpm run smoke:enterprise`
+- Run both in sequence:
+  - `pnpm run smoke:full -- --url https://your-deployment.vercel.app`
+
+Optional environment variables:
+- `VERCEL_BYPASS_TOKEN` and `SMOKE_BYPASS_HEADER` for protected deployments.
+- `SMOKE_MIN_DEVELOPERS`, `SMOKE_MIN_AREAS`, `SMOKE_MIN_INVENTORY_TOTAL` for threshold tuning.
+
 ## Options Matrix
 ### Option 1: Dedicated staging environment without SSO
 - **Pros:** Stable CI target and full isolation from production changes.

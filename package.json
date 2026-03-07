@@ -10,6 +10,9 @@
     "precompile": "pnpm guardian",
     "postinstall": "prisma generate",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:postdeploy": "tsx scripts/post-deploy-smoke.ts",
+    "smoke:enterprise": "tsx scripts/enterprise-seed-validate.ts",
+    "smoke:full": "pnpm run smoke:postdeploy && pnpm run smoke:enterprise",
     "start": "next start",
     "test": "vitest run",
     "test:db-contract": "vitest run tests/db-contract.test.ts"
