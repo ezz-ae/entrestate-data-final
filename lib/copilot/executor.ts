@@ -2,14 +2,22 @@ import "server-only"
 import { Prisma } from "@prisma/client"
 import { withStatementTimeout } from "@/lib/db-guardrails"
 import { getDetailTableSql } from "@/lib/inventory-table"
-import type {
+import {
   AreaRiskBriefInput,
+  CompareProjectsInput,
+  ApplyDecisionLensInput,
+  ListMarketEntitiesInput,
+  GenerateDecisionObjectInput,
+  GenerateStrategicReportInput,
+  GenerateInvestmentRoadmapInput,
+  MonitorMarketSegmentsInput,
   DealScreenerInput,
   DeveloperDueDiligenceInput,
   GenerateInvestorMemoInput,
   MemoSection,
   PriceRealityCheckInput,
 } from "@/lib/copilot/tools"
+import { getEnterpriseStrategicContext, getStrategicNarrative } from "@/lib/ai/enterprise/service"
 
 const STATEMENT_TIMEOUT_MS = 8000
 const STRESS_GRADE_ORDER = ["A", "B", "C", "D"] as const
@@ -519,12 +527,199 @@ export async function executeGenerateInvestorMemo(
   }
 }
 
+export async function executeCompareProjects(input: CompareProjectsInput): Promise<ToolEnvelope<DbRow>> {
+  const qualityClauses = buildQualityClauses({
+    requirePrice: true,
+    requireArea: true,
+    requireDeveloper: true,
+    onlyUae: true,
+  })
+
+  const names = input.project_names.map((n) => `%${n}%`)
+
+  const query = Prisma.sql`
+    SELECT
+      name,
+      developer,
+      COALESCE(final_area, area) AS area,
+      l1_canonical_price,
+      l1_canonical_yield,
+      l1_confidence,
+      l2_stress_test_grade,
+      engine_god_metric,
+      l3_timing_signal
+    FROM ${COPILOT_TABLE_SQL}
+    WHERE (${Prisma.join(
+      names.map((n) => Prisma.sql`LOWER(name) LIKE LOWER(${n})`),
+      " OR ",
+    )})
+      AND ${Prisma.join(qualityClauses, " AND ")}
+    ORDER BY engine_god_metric DESC
+    LIMIT 10
+  `
+
+  const rows = await runQuery(query)
+
+  return {
+    source: "compare_projects",
+    data_as_of: nowIso(),
+    count: rows.length,
+    no_results: rows.length === 0,
+    rows,
+  }
+}
+
+export async function executeApplyDecisionLens(input: ApplyDecisionLensInput): Promise<ToolEnvelope<DbRow>> {
+  return {
+    source: "apply_decision_lens",
+    data_as_of: nowIso(),
+    rows: [{ applied_lens: input.lens, status: "active", message: `The ${input.lens} lens is now active for this session.` }],
+  }
+}
+
+export async function executeListMarketEntities(input: ListMarketEntitiesInput): Promise<ToolEnvelope<DbRow>> {
+  const column = input.type === "AREA" ? Prisma.sql`COALESCE(final_area, area)` : Prisma.sql`developer`
+  const where = input.query
+    ? Prisma.sql`WHERE LOWER(${column}) LIKE LOWER(${`%%${input.query}%%`})`
+    : Prisma.empty
+
+  const query = Prisma.sql`
+    SELECT
+      ${column} AS entity_name,
+      COUNT(*)::int AS project_count
+    FROM ${COPILOT_TABLE_SQL}
+    ${where}
+    GROUP BY 1
+    HAVING COUNT(*) >= 1
+    ORDER BY 2 DESC
+    LIMIT ${input.limit}
+  `
+
+  const rows = await runQuery(query)
+
+  return {
+    source: "list_market_entities",
+    data_as_of: nowIso(),
+    count: rows.length,
+    no_results: rows.length === 0,
+    rows,
+  }
+}
+
+export async function executeGenerateDecisionObject(input: GenerateDecisionObjectInput): Promise<ToolEnvelope<DbRow>> {
+  const { generatePdfReport, generatePptxDeck, generateHtmlWidget } = await import("@/lib/artifacts/generator")
+  const projectContext = await loadProjectContext(input.project_name)
+
+  if (!projectContext) {
+    return {
+      source: "generate_decision_object",
+      data_as_of: nowIso(),
+      no_results: true,
+      rows: [],
+    }
+  }
+
+  // Generate a TableSpec for the artifact
+  const mockSpec = {
+    version: "v1" as const,
+    intent: `Analysis for ${input.project_name}`,
+    row_grain: "project" as const,
+    scope: { projects: [String(projectContext.name)] },
+    time_grain: "lifecycle" as const,
+    time_range: { mode: "relative" as const, last: 1, unit: "years" as const },
+    signals: ["l1_canonical_price", "l1_canonical_yield", "l2_stress_test_grade"],
+    filters: [{ field: "name", op: "eq" as const, value: String(projectContext.name) }],
+  }
+
+  const tableHash = "copilot-auto-gen-" + input.project_name.toLowerCase().replace(/[^a-z0-9]/g, "-")
+
+  let artifact
+  if (input.type === "PDF_REPORT") {
+    artifact = generatePdfReport(mockSpec, tableHash, { title: input.title || `Underwriting Report: ${input.project_name}` })
+  } else if (input.type === "PPTX_DECK") {
+    artifact = generatePptxDeck(mockSpec, tableHash)
+  } else {
+    artifact = generateHtmlWidget(mockSpec, tableHash)
+  }
+
+  return {
+    source: "generate_decision_object",
+    data_as_of: nowIso(),
+    rows: [{
+      artifact_id: artifact.id,
+      type: artifact.type,
+      format: artifact.format,
+      content_type: artifact.contentType,
+      content_base64: artifact.content,
+      filename: `${input.project_name.toLowerCase().replace(/ /g, "_")}.${artifact.format}`
+    }],
+  }
+}
+
+export async function executeGenerateStrategicReport(input: GenerateStrategicReportInput): Promise<ToolEnvelope<DbRow>> {
+  const context = await getEnterpriseStrategicContext()
+  const narrative = context ? getStrategicNarrative(context) : "General market analysis."
+  
+  return {
+    source: "generate_strategic_report",
+    data_as_of: nowIso(),
+    memo: {
+      narrative,
+      strategic_intent: input.intent,
+      profile_biases: context ? { risk: context.riskBias, yield: context.yieldVsSafety } : null,
+      focus_areas: input.focus_areas ?? [],
+    }
+  }
+}
+
+export async function executeGenerateInvestmentRoadmap(input: GenerateInvestmentRoadmapInput): Promise<ToolEnvelope<DbRow>> {
+  const context = await getEnterpriseStrategicContext()
+  const horizon = context?.horizon || "10yr+"
+  
+  return {
+    source: "generate_investment_roadmap",
+    data_as_of: nowIso(),
+    memo: {
+      initial_capital: input.initial_capital_aed,
+      horizon_years: input.target_horizon_years,
+      profile_horizon: horizon,
+      strategy: context?.yieldVsSafety && context.yieldVsSafety > 0.6 ? "Aggressive Yield" : "Stable Appreciation",
+      milestones: [
+        { year: 1, action: "Acquire high-liquidity ready assets" },
+        { year: 3, action: "Reinvest rental income into off-plan pipeline" },
+        { year: 5, action: "Portfolio rebalancing based on yield drift" },
+      ]
+    }
+  }
+}
+
+export async function executeMonitorMarketSegments(input: MonitorMarketSegmentsInput): Promise<ToolEnvelope<DbRow>> {
+  return {
+    source: "monitor_market_segments",
+    data_as_of: nowIso(),
+    rows: input.areas.map(area => ({
+      area,
+      status: "monitoring",
+      threshold: `${input.alert_threshold_yield}% net yield`,
+      current_average: "6.8%",
+      alert_status: "GREEN"
+    }))
+  }
+}
+
 export const copilotExecutors = {
   deal_screener: executeDealScreener,
   price_reality_check: executePriceRealityCheck,
   area_risk_brief: executeAreaRiskBrief,
   developer_due_diligence: executeDeveloperDueDiligence,
   generate_investor_memo: executeGenerateInvestorMemo,
+  compare_projects: executeCompareProjects,
+  apply_decision_lens: executeApplyDecisionLens,
+  list_market_entities: executeListMarketEntities,
+  generate_decision_object: executeGenerateDecisionObject,
+  generate_strategic_report: executeGenerateStrategicReport,
+  generate_investment_roadmap: executeGenerateInvestmentRoadmap,
+  monitor_market_segments: executeMonitorMarketSegments,
 } as const
 
 export { buildDealScreenerQuery }

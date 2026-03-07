@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -21,10 +22,24 @@ const FALLBACK_USER = {
 }
 
 export function AccountMenu() {
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const { data: session, isPending } = authClient.useSession()
 
-  if (!session?.user && !isPending) {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted || isPending) {
+    return (
+      <div className="flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm text-foreground opacity-50">
+        <div className="h-7 w-7 rounded-full bg-muted animate-pulse" />
+        <span className="hidden sm:inline">Account</span>
+      </div>
+    )
+  }
+
+  if (!session?.user) {
     return (
       <Link
         href="/login"

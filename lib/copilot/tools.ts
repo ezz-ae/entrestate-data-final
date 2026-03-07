@@ -51,12 +51,68 @@ export const generateInvestorMemoInputSchema = z
   })
   .strict()
 
+export const compareProjectsInputSchema = z
+  .object({
+    project_names: z.array(z.string().trim().min(1)).min(2).max(3),
+  })
+  .strict()
+
+export const applyDecisionLensInputSchema = z
+  .object({
+    lens: z.enum(["CONSERVATIVE", "BALANCED", "YIELD_MAXIMIZER"]),
+  })
+  .strict()
+
+export const listMarketEntitiesInputSchema = z
+  .object({
+    type: z.enum(["AREA", "DEVELOPER"]),
+    query: z.string().trim().min(1).optional(),
+    limit: z.number().int().min(1).max(50).default(20),
+  })
+  .strict()
+
+export const generateDecisionObjectInputSchema = z
+  .object({
+    type: z.enum(["PDF_REPORT", "PPTX_DECK", "HTML_WIDGET"]),
+    project_name: z.string().trim().min(1),
+    title: z.string().trim().optional(),
+  })
+  .strict()
+
+export const generateStrategicReportInputSchema = z
+  .object({
+    intent: z.string().trim().min(1),
+    focus_areas: z.array(z.string()).optional(),
+  })
+  .strict()
+
+export const generateInvestmentRoadmapInputSchema = z
+  .object({
+    initial_capital_aed: z.number().positive(),
+    target_horizon_years: z.number().int().min(1).max(25).default(10),
+  })
+  .strict()
+
+export const monitorMarketSegmentsInputSchema = z
+  .object({
+    areas: z.array(z.string()).min(1),
+    alert_threshold_yield: z.number().optional().default(6.5),
+  })
+  .strict()
+
 export const copilotToolSchemas = {
   deal_screener: dealScreenerInputSchema,
   price_reality_check: priceRealityCheckInputSchema,
   area_risk_brief: areaRiskBriefInputSchema,
   developer_due_diligence: developerDueDiligenceInputSchema,
   generate_investor_memo: generateInvestorMemoInputSchema,
+  compare_projects: compareProjectsInputSchema,
+  apply_decision_lens: applyDecisionLensInputSchema,
+  list_market_entities: listMarketEntitiesInputSchema,
+  generate_decision_object: generateDecisionObjectInputSchema,
+  generate_strategic_report: generateStrategicReportInputSchema,
+  generate_investment_roadmap: generateInvestmentRoadmapInputSchema,
+  monitor_market_segments: monitorMarketSegmentsInputSchema,
 } as const
 
 export type DealScreenerInput = z.infer<typeof dealScreenerInputSchema>
@@ -64,9 +120,27 @@ export type PriceRealityCheckInput = z.infer<typeof priceRealityCheckInputSchema
 export type AreaRiskBriefInput = z.infer<typeof areaRiskBriefInputSchema>
 export type DeveloperDueDiligenceInput = z.infer<typeof developerDueDiligenceInputSchema>
 export type GenerateInvestorMemoInput = z.infer<typeof generateInvestorMemoInputSchema>
+export type CompareProjectsInput = z.infer<typeof compareProjectsInputSchema>
+export type ApplyDecisionLensInput = z.infer<typeof applyDecisionLensInputSchema>
+export type ListMarketEntitiesInput = z.infer<typeof listMarketEntitiesInputSchema>
+export type GenerateDecisionObjectInput = z.infer<typeof generateDecisionObjectInputSchema>
+export type GenerateStrategicReportInput = z.infer<typeof generateStrategicReportInputSchema>
+export type GenerateInvestmentRoadmapInput = z.infer<typeof generateInvestmentRoadmapInputSchema>
+export type MonitorMarketSegmentsInput = z.infer<typeof monitorMarketSegmentsInputSchema>
 export type MemoSection = z.infer<typeof memoSectionSchema>
 
 export const copilotSystemPrompt = `You are the Entrestate Decision Copilot — a UAE real estate investment analyst.
+You guide users through the "Decision Tunnel": Intent → Evidence → Judgment → Action.
+
+DECISION TUNNEL STAGES:
+1. INTENT: Extract parameters (Budget, Area, Unit, Strategy) from user goals.
+2. EVIDENCE: Call tools to get raw data. Quote "Evidence Drawer" fields (sources, exclusions, assumptions).
+3. JUDGMENT: Ask user for their "Decision Lens" (Conservative, Balanced, Yield Maximizer) or apply if known.
+4. ACTION: Propose generating a Decision Object (PDF, Deck, Memo).
+
+ENTERPRISE CAPABILITIES:
+- If user is Institutional, use "Strategic AI" tools for Roadmaps and Market Monitoring.
+- Reference the user's specific strategic profile (Risk/Yield biases) when giving advice.
 
 RULES:
 1. NEVER invent numbers. Only quote from tool outputs.
@@ -74,17 +148,18 @@ RULES:
 3. Always show data freshness: "Data as of: [timestamp]"
 4. If a tool returns no results, say "No matching projects found" — don't fabricate
 5. Every answer must include: source (which tool), confidence level, what would change the conclusion
-6. When comparing projects, use the same tool for both to ensure consistency
-7. For price questions, always mention the price source and whether it's verified
-8. Refuse legal/financial guarantees but still provide analysis
-9. For memo requests, call generate_investor_memo using all sections by default unless user narrows scope
+6. When comparing projects, use compare_projects to ensure consistency.
+7. For price questions, always mention the price source and whether it's verified.
+8. Refuse legal/financial guarantees but still provide analysis.
+9. For memo requests, call generate_investor_memo using all sections by default unless user narrows scope.
 10. Always call at least one tool before giving a final answer.
+11. Explicitly mention "Exclusion Policy" when tools report filtered rows (distress sales, etc).
 
 PERSONALITY:
-- Direct, analytical, institutional-grade language
-- Present evidence first, then conclusion
+- Direct, analytical, institutional-grade language.
+- Present evidence first, then conclusion.
 - Use "The data shows..." not "I think..."
-- End complex answers with: "Would you like me to stress-test this or generate a full memo?"`
+- End complex analyses with: "Would you like me to generate a PDF report or apply a different Decision Lens?"`
 
 export const copilotToolDescriptions = {
   deal_screener: "Find and rank project candidates using deterministic market filters.",
@@ -93,4 +168,11 @@ export const copilotToolDescriptions = {
   developer_due_diligence: "Score and summarize a developer's reliability and portfolio quality.",
   generate_investor_memo:
     "Create a structured investment memo by combining project price reality, area risk, developer diligence, and stress test; if sections are omitted, use all sections.",
+  compare_projects: "Side-by-side comparison of up to 3 projects using core L1-L4 metrics.",
+  apply_decision_lens: "Set the evaluation profile: CONSERVATIVE (safety), BALANCED (mid-risk), or YIELD_MAXIMIZER (high ROI).",
+  list_market_entities: "Discover available areas or developers matching a query.",
+  generate_decision_object: "Create a downloadable PDF report, PPTX deck, or HTML widget for a project.",
+  generate_strategic_report: "Create a deep market summary through the user's risk/yield lens.",
+  generate_investment_roadmap: "Create a 5-25 year asset allocation plan based on capital and horizon.",
+  monitor_market_segments: "Set up proactive monitoring for specific areas based on yield thresholds.",
 } as const

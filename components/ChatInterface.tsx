@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
 type ChatInterfaceProps = {
+  id?: string
   initialDailyLimit?: number | null
   initialRemaining?: number | null
 }
@@ -364,6 +365,7 @@ const slashCommands: SlashCommand[] = [
 ]
 
 export function ChatInterface({
+  id,
   initialDailyLimit = 3,
   initialRemaining = 3,
 }: ChatInterfaceProps) {
@@ -383,9 +385,11 @@ export function ChatInterface({
   const [canvasOpen, setCanvasOpen] = useState(false)
 
   const { messages, sendMessage, status, error } = useChat({
+    id,
     transport: new DefaultChatTransport({
       api: "/api/copilot",
     }),
+    body: { id },
   })
 
   useEffect(() => {

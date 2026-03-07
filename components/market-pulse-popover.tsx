@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import type { MarketScoreSummary, SystemHealthcheckRow } from "@/lib/market-score/types"
 
 export function MarketPulsePopover({ className }: { className?: string }) {
+  const [mounted, setMounted] = useState(false)
   const [summary, setSummary] = useState<MarketScoreSummary | null>(null)
   const [healthcheck, setHealthcheck] = useState<SystemHealthcheckRow | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setMounted(true)
     let isMounted = true
 
     const loadPulse = async () => {
@@ -46,6 +48,19 @@ export function MarketPulsePopover({ className }: { className?: string }) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 2)
   }, [summary])
+
+  if (!mounted) {
+    return (
+      <button
+        className={`hidden lg:inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/80 ${
+          className ?? ""
+        }`}
+      >
+        <Activity className="h-3.5 w-3.5 text-accent" />
+        Market pulse
+      </button>
+    )
+  }
 
   return (
     <Popover>

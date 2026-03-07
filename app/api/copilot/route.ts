@@ -8,8 +8,16 @@ import {
   getAnonymousCopilotAccountKey,
   incrementCopilotDailyUsage,
 } from "@/lib/copilot-usage"
+import { prisma } from "@/lib/prisma"
 import {
   executeAreaRiskBrief,
+  executeCompareProjects,
+  executeApplyDecisionLens,
+  executeListMarketEntities,
+  executeGenerateDecisionObject,
+  executeGenerateStrategicReport,
+  executeGenerateInvestmentRoadmap,
+  executeMonitorMarketSegments,
   executeDealScreener,
   executeDeveloperDueDiligence,
   executeGenerateInvestorMemo,
@@ -22,7 +30,21 @@ import {
   type DeveloperDueDiligenceInput,
   type GenerateInvestorMemoInput,
   type PriceRealityCheckInput,
+  type CompareProjectsInput,
+  type ApplyDecisionLensInput,
+  type ListMarketEntitiesInput,
+  type GenerateDecisionObjectInput,
+  type GenerateStrategicReportInput,
+  type GenerateInvestmentRoadmapInput,
+  type MonitorMarketSegmentsInput,
   areaRiskBriefInputSchema,
+  compareProjectsInputSchema,
+  applyDecisionLensInputSchema,
+  listMarketEntitiesInputSchema,
+  generateDecisionObjectInputSchema,
+  generateStrategicReportInputSchema,
+  generateInvestmentRoadmapInputSchema,
+  monitorMarketSegmentsInputSchema,
   copilotSystemPrompt,
   copilotToolDescriptions,
   dealScreenerInputSchema,
@@ -30,6 +52,11 @@ import {
   generateInvestorMemoInputSchema,
   priceRealityCheckInputSchema,
 } from "@/lib/copilot/tools"
+
+import {
+  loadChatSession,
+  saveChatMessage,
+} from "@/lib/copilot/persistence"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -62,7 +89,7 @@ export async function POST(request: Request) {
   const requestId = getRequestId(request)
 
   try {
-    const body = (await request.json()) as { messages?: UIMessage[] }
+    const body = (await request.json()) as { messages?: UIMessage[]; id?: string }
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
       return NextResponse.json({ error: "Invalid request payload", requestId }, { status: 400 })
     }
@@ -71,6 +98,20 @@ export async function POST(request: Request) {
     const entitlement = await getCurrentEntitlement(headerAccountKey)
     const usageAccountKey = entitlement.accountKey || getAnonymousCopilotAccountKey(request)
     const usage = await incrementCopilotDailyUsage(usageAccountKey, entitlement.tier)
+
+    const sessionId = body.id || null
+    const userId = entitlement.accountKey
+
+    // Persist the incoming user message if we have a userId
+    if (userId) {
+      const lastMessage = body.messages[body.messages.length - 1]
+      if (lastMessage.role === "user") {
+        await saveChatMessage(userId, sessionId, {
+          role: "user",
+          content: typeof lastMessage.content === "string" ? lastMessage.content : "",
+        })
+      }
+    }
 
     if (entitlement.tier === "free" && usage.used > FREE_COPILOT_DAILY_LIMIT) {
       return NextResponse.json(
@@ -88,7 +129,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const toolset = {
+    const toolset: Record<string, any> = {
       deal_screener: tool({
         description: copilotToolDescriptions.deal_screener,
         inputSchema: dealScreenerInputSchema,
@@ -115,7 +156,80 @@ export async function POST(request: Request) {
         inputSchema: generateInvestorMemoInputSchema,
         execute: async (input: GenerateInvestorMemoInput) => withGuardrails(await executeGenerateInvestorMemo(input)),
       }),
-    } as const
+      compare_projects: tool({
+        description: copilotToolDescriptions.compare_projects,
+        inputSchema: compareProjectsInputSchema,
+        execute: async (input: CompareProjectsInput) => withGuardrails(await executeCompareProjects(input)),
+      }),
+      apply_decision_lens: tool({
+        description: copilotToolDescriptions.apply_decision_lens,
+        inputSchema: applyDecisionLensInputSchema,
+        execute: async (input: ApplyDecisionLensInput) => withGuardrails(await executeApplyDecisionLens(input)),
+      }),
+      list_market_entities: tool({
+        description: copilotToolDescriptions.list_market_entities,
+        inputSchema: listMarketEntitiesInputSchema,
+        execute: async (input: ListMarketEntitiesInput) => withGuardrails(await executeListMarketEntities(input)),
+      }),
+      generate_decision_object: tool({
+        description: copilotToolDescriptions.generate_decision_object,
+        inputSchema: generateDecisionObjectInputSchema,
+        execute: async (input: GenerateDecisionObjectInput) => {
+          const result = await executeGenerateDecisionObject(input)
+          if (entitlement.accountKey && result.rows?.[0]) {
+            const artifact = result.rows[0]
+            try {
+              // Create a backing timetable for the artifact
+              const timetable = await prisma.timeTable.create({
+                data: {
+                  ownerId: entitlement.accountKey,
+                  intent: `Copilot generation: ${input.project_name}`,
+                  hash: `copilot-${Date.now()}`,
+                  rowGrain: "project",
+                  spec: {},
+                  config: {},
+                },
+              })
+
+              await prisma.decisionObject.create({
+                data: {
+                  id: String(artifact.artifact_id),
+                  timetableId: timetable.id,
+                  ownerId: entitlement.accountKey,
+                  type: artifact.type as any,
+                  status: "ready",
+                  artifactUrls: {
+                    [artifact.format]: `/api/artifacts/download?id=${artifact.artifact_id}`
+                  },
+                },
+              })
+            } catch (dbError) {
+              console.error("Failed to persist decision object:", dbError)
+            }
+          }
+          return withGuardrails(result)
+        },
+      }),
+    }
+
+    // Add Enterprise tools only for Institutional tier
+    if (entitlement.tier === "institutional") {
+      toolset.generate_strategic_report = tool({
+        description: copilotToolDescriptions.generate_strategic_report,
+        inputSchema: generateStrategicReportInputSchema,
+        execute: async (input: GenerateStrategicReportInput) => withGuardrails(await executeGenerateStrategicReport(input)),
+      })
+      toolset.generate_investment_roadmap = tool({
+        description: copilotToolDescriptions.generate_investment_roadmap,
+        inputSchema: generateInvestmentRoadmapInputSchema,
+        execute: async (input: GenerateInvestmentRoadmapInput) => withGuardrails(await executeGenerateInvestmentRoadmap(input)),
+      })
+      toolset.monitor_market_segments = tool({
+        description: copilotToolDescriptions.monitor_market_segments,
+        inputSchema: monitorMarketSegmentsInputSchema,
+        execute: async (input: MonitorMarketSegmentsInput) => withGuardrails(await executeMonitorMarketSegments(input)),
+      })
+    }
 
     const model = resolveCopilotModel()
     if (!model) {
@@ -132,6 +246,15 @@ export async function POST(request: Request) {
       stopWhen: stepCountIs(6),
       toolChoice: "required",
       tools: toolset,
+      onFinish: async ({ text, toolCalls }) => {
+        if (userId && (text || (toolCalls && toolCalls.length > 0))) {
+          await saveChatMessage(userId, sessionId, {
+            role: "assistant",
+            content: text || "",
+            toolCalls: toolCalls,
+          })
+        }
+      },
     })
     return result.toUIMessageStreamResponse({
       originalMessages: normalizedMessages,

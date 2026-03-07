@@ -11,6 +11,7 @@ export default async function ChatPage({
   const entitlement = await getCurrentEntitlement()
   const params = (await searchParams) ?? {}
   const billingParam = Array.isArray(params.billing) ? params.billing[0] : params.billing
+  const sessionId = Array.isArray(params.id) ? params.id[0] : params.id
   const usage = entitlement.accountKey
     ? await getCopilotDailyUsage(entitlement.accountKey, entitlement.tier)
     : {
@@ -29,6 +30,7 @@ export default async function ChatPage({
           <p className="mb-4 text-sm text-emerald-600">Subscription activated. Your new tier is syncing now.</p>
         ) : null}
         <ChatInterface
+          id={sessionId || undefined}
           initialDailyLimit={usage.limit}
           initialRemaining={usage.remaining}
         />

@@ -82,6 +82,8 @@ model Team {
   agents    AgentDefinition[]
   credentials ConnectorCredential[]
   knowledgeSources KnowledgeSource[]
+  apiKeys   ApiKey[]
+  userProfiles UserProfile[]
 }
 
 model User {
@@ -93,6 +95,9 @@ model User {
   memberships TeamMember[]
   timetables  TimeTable[]
   profile     UserProfile?
+  chatSessions ChatSession[]
+  decisionObjects DecisionObject[]
+  apiKeys     ApiKey[]
 }
 
 model TeamMember {
@@ -283,6 +288,7 @@ model TimeTable {
 model DecisionObject {
   id              String             @id @default(cuid())
   timetableId     String
+  ownerId         String?            // Persistent link to the generating user
   type            DecisionObjectType
   version         Int                @default(1)
   status          String             @default("draft")
@@ -293,14 +299,63 @@ model DecisionObject {
   updatedAt       DateTime           @updatedAt
   
   timetable       TimeTable          @relation(fields: [timetableId], references: [id])
+  owner           User?              @relation(fields: [ownerId], references: [id])
   automations     Automation[]
   
   @@index([timetableId])
+  @@index([ownerId])
   @@map("decision_objects")
+}
+
+model ChatSession {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  ChatMessage[]
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String   // "user", "assistant", "system", "tool"
+  content   String
+  toolCalls Json?
+  createdAt DateTime @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  teamId      String?
+  name        String
+  key         String   @unique // The hashed or encrypted key
+  prefix      String   // First 8 chars for display
+  scopes      String[] // "read:market", "read:listings", etc.
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id])
+  team        Team?    @relation(fields: [teamId], references: [id])
+
+  @@index([userId])
+  @@index([key])
+  @@map("api_keys")
 }
 
 model UserProfile {
   userId          String             @id
+  teamId          String?            // Link to a team for shared strategic context
   riskBias        Float              @default(0.65) // Default market weight
   horizon         String?            // "Ready", "1-2yr", etc.
   yieldVsSafety   Float              @default(0.5)
@@ -309,6 +364,7 @@ model UserProfile {
   updatedAt       DateTime           @updatedAt
   
   user            User               @relation(fields: [userId], references: [id])
+  team            Team?              @relation(fields: [teamId], references: [id])
   @@map("user_profiles")
 }
 
