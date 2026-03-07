@@ -27,6 +27,7 @@ import {
   DEFAULT_COMPREHENSIVE_PROFILE,
   getComprehensiveProfileFromSignals,
 } from "@/lib/profile/comprehensive"
+import { generateMediaRichReport } from "@/lib/artifacts/media-report"
 import type {
   ComprehensiveProfile,
   ComprehensiveProfileMemoryEntry,
@@ -646,8 +647,9 @@ export function ChatInterface({
 
   const hasConversation = useMemo(() => {
     const stream = messages as any[]
-    return stream.some((message) => message.role === "user" || message.role === "assistant")
-  }, [messages])
+    if (stream.length > 0) return true
+    return status === "submitted" || status === "streaming"
+  }, [messages, status])
 
   useEffect(() => {
     if (!hasConversation) setCanvasOpen(false)
@@ -805,7 +807,8 @@ export function ChatInterface({
   }, [slashQuery])
 
   const sendPrompt = async (prompt: string) => {
-    if (!prompt.trim() || isBusy) return
+    const cleanedPrompt = prompt.trim()
+    if (!cleanedPrompt || isBusy) return
     if (chatBlocked) {
       if (cooldownSecondsRemaining && cooldownSecondsRemaining > 0) {
         setLimitMessage(
@@ -818,7 +821,10 @@ export function ChatInterface({
     }
 
     setLimitMessage(null)
-    await sendMessage({ text: prompt })
+    await sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: cleanedPrompt }],
+    })
 
     if (limit !== null) {
       setRemaining((prev) => {
@@ -1236,7 +1242,7 @@ export function ChatInterface({
           ))}
         </div>
 
-        <div className="relative z-10 h-[58vh] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/55 p-3 backdrop-blur-sm md:h-[60vh]">
+        <div id="chat-container" className="relative z-10 h-[58vh] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/55 p-3 backdrop-blur-sm md:h-[60vh]">
           {(messages as any[]).length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/60 bg-background/75 p-4 text-sm text-muted-foreground">
               Ask for anything real estate. Compare projects, simulate scenarios, draft reports, and run live intelligence from one chat.
@@ -1376,7 +1382,6 @@ export function ChatInterface({
             <BarChart3 className="h-3.5 w-3.5 text-primary" />
             <p className="text-xs font-semibold text-foreground">Performance Curves</p>
           </div>
-
           {comparisonRows.length < 2 ? (
             <p className="text-xs text-muted-foreground">Run a comparison query to see score and yield trend curves.</p>
           ) : (
@@ -1628,6 +1633,24 @@ export function ChatInterface({
             variant="secondary"
           >
             {reportDraft.status === "saving" ? "Saving report..." : "Save report draft"}
+          </Button>
+          <Button
+            type="button"
+            onClick={async () => {
+              const chatContent = document.getElementById('chat-container');
+              if (chatContent) {
+                const pdf = await generateMediaRichReport(chatContent.outerHTML);
+                const link = document.createElement('a');
+                link.href = pdf;
+                link.download = 'media-report.pdf';
+                link.click();
+              }
+            }}
+            disabled={reportDraft.status === "saving"}
+            className="mt-3 w-full"
+            variant="secondary"
+          >
+            Download Media Report
           </Button>
 
           {reportDraft.message ? (

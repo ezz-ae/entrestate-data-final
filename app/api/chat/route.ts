@@ -5,7 +5,7 @@ import { getPublicErrorMessage, getRequestId } from "@/lib/api-errors"
 import { resolveCopilotModel } from "@/lib/ai-provider"
 import { getCurrentEntitlement } from "@/lib/account-entitlement"
 import {
-  consumeCopilotUsage,
+  safeConsumeCopilotUsage,
   getAnonymousCopilotAccountKey,
 } from "@/lib/copilot-usage"
 import {
@@ -55,6 +55,11 @@ const defaultSuggestions = [
   "Best areas for 1-2 year delivery",
   "Projects in Abu Dhabi under AED 2M",
 ]
+
+const rawChatModelTimeoutMs = Number.parseInt(process.env.CHAT_MODEL_TIMEOUT_MS ?? "5000", 10)
+const chatModelTimeoutMs = Number.isFinite(rawChatModelTimeoutMs) && rawChatModelTimeoutMs >= 1000
+  ? rawChatModelTimeoutMs
+  : 5000
 
 type ChatCard = {
   type: "stat" | "area" | "project"
@@ -299,6 +304,24 @@ function buildUsageHeaders(usage: {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+
+    promise
+      .then((value) => {
+        clearTimeout(timeout)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timeout)
+        reject(error)
+      })
+  })
+}
+
 async function buildDeterministicFallback(message: string, context?: { city?: string; area?: string }) {
   const budgetMax = parseBudgetAed(message)
   const beds = parseBedsFromMessage(message)
@@ -350,7 +373,7 @@ export async function POST(request: Request) {
     const headerAccountKey = request.headers.get("x-entrestate-account-key")?.trim() || request.headers.get("x-entrestate-user-id")?.trim()
     const entitlement = await getCurrentEntitlement(headerAccountKey)
     const usageAccountKey = entitlement.accountKey || getAnonymousCopilotAccountKey(request)
-    const { allowed, usage } = await consumeCopilotUsage(usageAccountKey, entitlement.tier)
+    const { allowed, usage } = await safeConsumeCopilotUsage(usageAccountKey, entitlement.tier)
 
     if (!allowed) {
       return NextResponse.json(
@@ -432,15 +455,19 @@ export async function POST(request: Request) {
     }
 
     try {
-      const response = await generateText({
-        model,
-        system: copilotSystemPrompt,
-        prompt,
-        temperature: 0,
-        maxSteps: 6,
-        toolChoice: "auto",
-        tools: toolset,
-      })
+      const response = await withTimeout(
+        generateText({
+          model,
+          system: copilotSystemPrompt,
+          prompt,
+          temperature: 0,
+          maxSteps: 6,
+          toolChoice: "auto",
+          tools: toolset,
+        }),
+        chatModelTimeoutMs,
+        "chat model",
+      )
 
       const text = response.text.trim()
       const toolResults = ((response as { toolResults?: Array<{ result?: unknown }> }).toolResults ?? [])

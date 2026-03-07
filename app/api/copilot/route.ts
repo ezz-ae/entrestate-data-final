@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server"
-import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai"
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  stepCountIs,
+  streamText,
+  tool,
+  type UIMessage,
+} from "ai"
 import { getPublicErrorMessage, getRequestId } from "@/lib/api-errors"
 import { resolveCopilotModel } from "@/lib/ai-provider"
 import { getCurrentEntitlement } from "@/lib/account-entitlement"
 import {
-  consumeCopilotUsage,
+  safeConsumeCopilotUsage,
   getAnonymousCopilotAccountKey,
 } from "@/lib/copilot-usage"
 import { prisma } from "@/lib/prisma"
@@ -97,7 +105,7 @@ export async function POST(request: Request) {
     const headerAccountKey = request.headers.get("x-entrestate-account-key")?.trim() || request.headers.get("x-entrestate-user-id")?.trim()
     const entitlement = await getCurrentEntitlement(headerAccountKey)
     const usageAccountKey = entitlement.accountKey || getAnonymousCopilotAccountKey(request)
-    const { allowed, usage } = await consumeCopilotUsage(usageAccountKey, entitlement.tier)
+    const { allowed, usage } = await safeConsumeCopilotUsage(usageAccountKey, entitlement.tier)
 
     if (!allowed) {
       return NextResponse.json(
@@ -241,9 +249,40 @@ export async function POST(request: Request) {
       })
     }
 
+    const normalizedMessages = normalizeIncomingMessages(body.messages)
+
     const model = resolveCopilotModel()
     if (!model) {
-      throw new Error("Copilot model is not configured. Set GEMINI_KEY, AI_GATEWAY_API_KEY, or OPENAI_API_KEY.")
+      const stream = createUIMessageStream({
+        originalMessages: normalizedMessages,
+        execute: ({ writer }) => {
+          writer.write({ type: "start" })
+          writer.write({ type: "start-step" })
+          writer.write({ type: "text-start", id: "text-1" })
+          writer.write({
+            type: "text-delta",
+            id: "text-1",
+            delta:
+              "Copilot AI is temporarily running in fallback mode. Configure GEMINI_KEY, AI_GATEWAY_API_KEY, or OPENAI_API_KEY to enable full streaming reasoning.",
+          })
+          writer.write({ type: "text-end", id: "text-1" })
+          writer.write({ type: "finish-step" })
+          writer.write({ type: "finish", finishReason: "stop" })
+        },
+      })
+
+      return createUIMessageStreamResponse({
+        stream,
+        headers: {
+          "x-request-id": requestId,
+          "x-entrestate-tier": entitlement.tier,
+          "x-copilot-usage-used": String(usage.used),
+          "x-copilot-usage-limit": usage.limit === null ? "unlimited" : String(usage.limit),
+          "x-copilot-usage-remaining": usage.remaining === null ? "unlimited" : String(usage.remaining),
+          "x-copilot-usage-blocked": String(usage.blocked),
+          "x-copilot-cooldown-seconds": usage.cooldownSecondsRemaining === null ? "0" : String(usage.cooldownSecondsRemaining),
+        },
+      })
     }
 
     // Load user profile for personalized system context
@@ -271,8 +310,6 @@ export async function POST(request: Request) {
     }
 
     const systemPrompt = copilotSystemPrompt.replace("{USER_PROFILE_CONTEXT}", profileContext)
-
-    const normalizedMessages = normalizeIncomingMessages(body.messages)
 
     const result = streamText({
       model,

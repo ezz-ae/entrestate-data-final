@@ -12,6 +12,29 @@
 
 ---
 
+## 2026-03-07 Finalization Snapshot (Current)
+
+- [x] `/reports/library` route compiles and renders; route-level error boundary added.
+- [x] Reports library visual accents aligned to primary/blue palette.
+- [x] Docs mind-map article coverage completed for all nodes (44/44).
+- [x] Source-of-truth registry seed added (`data/source-of-truth-registry.csv` + schema + docs).
+- [x] Investor KPI audit trail seed added (`data/investor-metrics-audit.csv` + schema + docs).
+- [x] Header/footer docs navigation aligned with current IA.
+- [x] `pnpm lint` passes.
+- [x] `pnpm build` passes.
+- [x] Neon/Auth + LLM go-live runbook added in `docs/neon-auth-go-live.md`.
+- [ ] Remaining business/data completeness tracked in `docs/MISSING_DATA_ORDER.md`.
+
+### Go-live execution checklist (Neon Auth + LLM)
+
+- [ ] Configure production env vars listed in `docs/neon-auth-go-live.md`.
+- [ ] Run Prisma deploy migration on production DB.
+- [ ] Verify `/api/health/db` and `/api/auth/get-session` in production.
+- [ ] Verify `/api/chat` and `/api/copilot` in production.
+- [ ] Run `pnpm smoke --url <production-url>` and attach results to release notes.
+
+---
+
 ## PROMPT #1 — Platform A→E (repo structure, surfaces, ops)
 ### A) Experience Plane
 - [x] Landing page: 1 headline + Chat / Search / Map + 3 Golden Path buttons + Trust bar

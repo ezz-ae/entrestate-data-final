@@ -45,6 +45,11 @@ type CopilotTier = "free" | "pro" | "team" | "institutional"
 
 let ensureUsageTablesPromise: Promise<void> | null = null
 
+function isRetryableUsageError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false
+  return error.code === "P2028" || error.code === "P2034"
+}
+
 function applyLimit(used: number, limit: number | null): CopilotDailyUsage["remaining"] {
   if (limit === null) return null
   return Math.max(limit - used, 0)
@@ -341,6 +346,52 @@ export async function consumeCopilotUsage(accountKey: string, tier: CopilotTier)
   })
 
   return usage
+}
+
+export async function safeConsumeCopilotUsage(
+  accountKey: string,
+  tier: CopilotTier,
+): Promise<{ allowed: boolean; usage: CopilotDailyUsage }> {
+  try {
+    return await consumeCopilotUsage(accountKey, tier)
+  } catch (error) {
+    if (!isRetryableUsageError(error)) {
+      throw error
+    }
+
+    console.error("Copilot usage transaction failed; using non-blocking fallback.", {
+      accountKey,
+      tier,
+      error,
+    })
+
+    try {
+      const usage = await getCopilotDailyUsage(accountKey, tier)
+      return {
+        allowed: true,
+        usage,
+      }
+    } catch (fallbackError) {
+      console.error("Copilot usage fallback read failed; allowing request with default usage.", {
+        accountKey,
+        tier,
+        fallbackError,
+      })
+
+      return {
+        allowed: true,
+        usage:
+          tier === "free"
+            ? buildFreeUsage(accountKey, new Date(), {
+                used: 0,
+                blocked: false,
+                resetAt: null,
+                cooldownUntil: null,
+              })
+            : buildUnlimitedUsage(accountKey),
+      }
+    }
+  }
 }
 
 export async function incrementCopilotDailyUsage(accountKey: string, tier: CopilotTier) {
