@@ -3,6 +3,13 @@ import { z } from "zod"
 import { getRequestId } from "@/lib/api-errors"
 import { saveReport } from "@/lib/runtime-store"
 import { hasTierAccess } from "@/lib/tier-access"
+import { getSyncedUser } from "@/lib/auth/sync"
+import { prisma } from "@/lib/prisma"
+import {
+  DEFAULT_COMPREHENSIVE_PROFILE,
+  getComprehensiveProfileFromSignals,
+} from "@/lib/profile/comprehensive"
+import type { ComprehensiveProfileReportAudience } from "@/lib/profile/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -10,6 +17,9 @@ export const dynamic = "force-dynamic"
 const schema = z.object({
   title: z.string().trim().min(1).max(180),
   content: z.unknown(),
+  clientName: z.string().trim().min(1).max(120).optional(),
+  templateId: z.string().trim().min(1).optional(),
+  audience: z.enum(["client", "social", "investor", "executive"]).optional(),
 })
 
 export async function POST(request: Request) {
@@ -24,11 +34,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid report payload", requestId }, { status: 400 })
   }
 
+  const user = await getSyncedUser()
+  let comprehensiveProfile = DEFAULT_COMPREHENSIVE_PROFILE
+
+  if (user?.id) {
+    const profile = await prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: { inferredSignals: true },
+    })
+    comprehensiveProfile = getComprehensiveProfileFromSignals(profile?.inferredSignals)
+  }
+
+  const selectedTemplate = parsed.data.templateId
+    ? comprehensiveProfile.reportTemplates.find((template) => template.id === parsed.data.templateId)
+    : null
+
+  const reportAudience: ComprehensiveProfileReportAudience =
+    parsed.data.audience ?? selectedTemplate?.audience ?? "client"
+
+  const enabledExports = Object.entries(comprehensiveProfile.outputs)
+    .filter(([, enabled]) => enabled)
+    .map(([format]) => format)
+
+  const reportTitle =
+    selectedTemplate && parsed.data.clientName
+      ? `${selectedTemplate.name} · ${parsed.data.clientName}`
+      : parsed.data.title
+
+  const reportPayload = {
+    content: parsed.data.content,
+    profile: {
+      audience: reportAudience,
+      clientName: parsed.data.clientName ?? null,
+      branding: comprehensiveProfile.branding,
+      templateId: selectedTemplate?.id ?? null,
+      templateName: selectedTemplate?.name ?? null,
+      templateOutline: selectedTemplate?.outline ?? null,
+      enabledExports,
+    },
+  }
+
   const report = saveReport({
-    title: parsed.data.title,
-    payload: parsed.data.content,
+    title: reportTitle,
+    payload: reportPayload,
   })
 
-  return NextResponse.json({ report, requestId })
+  return NextResponse.json({ report, enabledExports, requestId })
 }
-

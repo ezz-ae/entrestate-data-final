@@ -23,10 +23,12 @@ export default async function StrategicProfilePage() {
   const isInstitutional = entitlement.tier === "institutional"
   
   const profile = user.profile || {
+    userId: user.id,
     riskBias: 0.65,
     yieldVsSafety: 0.5,
     horizon: "Ready",
-    preferredMarkets: []
+    preferredMarkets: [],
+    inferredSignals: null,
   }
 
   return (

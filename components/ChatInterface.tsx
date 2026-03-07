@@ -24,6 +24,16 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  DEFAULT_COMPREHENSIVE_PROFILE,
+  getComprehensiveProfileFromSignals,
+} from "@/lib/profile/comprehensive"
+import type {
+  ComprehensiveProfile,
+  ComprehensiveProfileMemoryEntry,
+  ComprehensiveProfileReportAudience,
+  ComprehensiveProfileReportTemplate,
+} from "@/lib/profile/types"
 
 type ChatInterfaceProps = {
   id?: string
@@ -53,6 +63,7 @@ type ReportDraftResult = {
   status: "idle" | "saving" | "saved" | "error"
   message?: string
   reportId?: string
+  enabledExports?: string[]
 }
 
 type ShortlistResult = {
@@ -121,6 +132,104 @@ function formatMetric(value: number | null, decimals = 1) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
+}
+
+function inferReportAudience(
+  transcript: string,
+  memoryEntry: ComprehensiveProfileMemoryEntry | null,
+): ComprehensiveProfileReportAudience {
+  const text = `${transcript} ${memoryEntry?.contextNotes ?? ""} ${(memoryEntry?.tags ?? []).join(" ")}`.toLowerCase()
+
+  if (["instagram", "linkedin", "social", "post", "campaign", "audience growth"].some((token) => text.includes(token))) {
+    return "social"
+  }
+  if (["board", "executive", "c-suite", "management summary", "ceo"].some((token) => text.includes(token))) {
+    return "executive"
+  }
+  if (["investor", "fund", "irr", "cap rate", "dscr", "returns", "portfolio"].some((token) => text.includes(token))) {
+    return "investor"
+  }
+
+  return "client"
+}
+
+function formatReportAudienceLabel(audience: ComprehensiveProfileReportAudience): string {
+  if (audience === "social") return "Social"
+  if (audience === "investor") return "Investor"
+  if (audience === "executive") return "Executive"
+  return "Client"
+}
+
+function findBestMemoryEntry(
+  transcript: string,
+  memoryEntries: ComprehensiveProfileMemoryEntry[],
+): ComprehensiveProfileMemoryEntry | null {
+  if (memoryEntries.length === 0) {
+    return null
+  }
+
+  const text = transcript.toLowerCase()
+
+  const byName = memoryEntries.find((entry) => text.includes(entry.clientName.toLowerCase()))
+  if (byName) {
+    return byName
+  }
+
+  const byTag = memoryEntries.find((entry) =>
+    entry.tags.some((tag) => tag && text.includes(tag.toLowerCase())),
+  )
+
+  return byTag ?? null
+}
+
+function findBestReportTemplate(
+  templates: ComprehensiveProfileReportTemplate[],
+  audience: ComprehensiveProfileReportAudience,
+  memoryEntry: ComprehensiveProfileMemoryEntry | null,
+): ComprehensiveProfileReportTemplate | null {
+  if (templates.length === 0) {
+    return null
+  }
+
+  const audienceTemplates = templates.filter((template) => template.audience === audience)
+  const searchableTemplates = audienceTemplates.length > 0 ? audienceTemplates : templates
+
+  if (memoryEntry) {
+    const clientName = memoryEntry.clientName.toLowerCase()
+    const matchedByClient = searchableTemplates.find((template) => {
+      const haystack = `${template.name} ${template.outline}`.toLowerCase()
+      return haystack.includes(clientName)
+    })
+    if (matchedByClient) {
+      return matchedByClient
+    }
+
+    const matchedByTag = searchableTemplates.find((template) => {
+      const haystack = `${template.name} ${template.outline}`.toLowerCase()
+      return memoryEntry.tags.some((tag) => haystack.includes(tag.toLowerCase()))
+    })
+    if (matchedByTag) {
+      return matchedByTag
+    }
+  }
+
+  return searchableTemplates[0] ?? null
+}
+
+function resolvePreferredExportFormat(enabledExports: string[] | undefined): "pdf" | "json" | "branded" {
+  if (!enabledExports || enabledExports.length === 0) {
+    return "pdf"
+  }
+  if (enabledExports.includes("pdf")) {
+    return "pdf"
+  }
+  if (enabledExports.includes("json")) {
+    return "json"
+  }
+  if (enabledExports.includes("brandedFiles")) {
+    return "branded"
+  }
+  return "pdf"
 }
 
 function normalizeToPercent(value: number | null, max: number) {
@@ -381,6 +490,10 @@ export function ChatInterface({
   const [limitMessage, setLimitMessage] = useState<string | null>(null)
   const [reportDraft, setReportDraft] = useState<ReportDraftResult>({ status: "idle" })
   const [shortlistResult, setShortlistResult] = useState<ShortlistResult>({ status: "idle" })
+  const [comprehensiveProfile, setComprehensiveProfile] = useState<ComprehensiveProfile>(DEFAULT_COMPREHENSIVE_PROFILE)
+  const [selectedMemoryEntryId, setSelectedMemoryEntryId] = useState("")
+  const [selectedTemplateId, setSelectedTemplateId] = useState("")
+  const [selectedAudienceOverride, setSelectedAudienceOverride] = useState<"" | ComprehensiveProfileReportAudience>("")
 
   const [selectedProject, setSelectedProject] = useState<string>("")
   const [downPaymentPct, setDownPaymentPct] = useState(30)
@@ -419,6 +532,43 @@ export function ChatInterface({
     }
   }, [])
 
+  useEffect(() => {
+    if (!mounted) return
+    let cancelled = false
+
+    const loadProfileContext = async () => {
+      try {
+        const response = await fetch("/api/account/profile", { cache: "no-store" })
+        if (!response.ok) {
+          return
+        }
+
+        const payload = (await response.json()) as {
+          profile?: {
+            inferredSignals?: unknown
+            comprehensiveProfile?: ComprehensiveProfile
+          }
+        }
+
+        if (cancelled || !payload.profile) {
+          return
+        }
+
+        const fromApi = payload.profile.comprehensiveProfile
+        const fallback = getComprehensiveProfileFromSignals(payload.profile.inferredSignals)
+        setComprehensiveProfile(fromApi ?? fallback)
+      } catch {
+        // Keep defaults when unavailable.
+      }
+    }
+
+    void loadProfileContext()
+
+    return () => {
+      cancelled = true
+    }
+  }, [mounted])
+
   const chatBlocked = dailyLimit !== null && (remaining ?? 0) <= 0
   const usageError = error?.message ?? ""
   const isLimitError = usageError.includes("429") || usageError.toLowerCase().includes("daily limit")
@@ -449,6 +599,18 @@ export function ChatInterface({
   }, [hasConversation])
 
   useEffect(() => {
+    setSelectedMemoryEntryId((current) =>
+      current && !comprehensiveProfile.memoryEntries.some((entry) => entry.id === current) ? "" : current,
+    )
+  }, [comprehensiveProfile.memoryEntries])
+
+  useEffect(() => {
+    setSelectedTemplateId((current) =>
+      current && !comprehensiveProfile.reportTemplates.some((template) => template.id === current) ? "" : current,
+    )
+  }, [comprehensiveProfile.reportTemplates])
+
+  useEffect(() => {
     if (comparisonRows.length === 0) {
       setSelectedProject("")
       return
@@ -468,6 +630,22 @@ export function ChatInterface({
     () =>
       `down payment ${downPaymentPct}%, interest ${interestRatePct.toFixed(2)}%, vacancy ${vacancyPct}%, operating cost ${opexPct}%`,
     [downPaymentPct, interestRatePct, vacancyPct, opexPct],
+  )
+
+  const selectedMemoryEntry = useMemo(
+    () =>
+      selectedMemoryEntryId
+        ? comprehensiveProfile.memoryEntries.find((entry) => entry.id === selectedMemoryEntryId) ?? null
+        : null,
+    [comprehensiveProfile.memoryEntries, selectedMemoryEntryId],
+  )
+
+  const selectedTemplate = useMemo(
+    () =>
+      selectedTemplateId
+        ? comprehensiveProfile.reportTemplates.find((template) => template.id === selectedTemplateId) ?? null
+        : null,
+    [comprehensiveProfile.reportTemplates, selectedTemplateId],
   )
 
   const simulationMetrics = useMemo(() => {
@@ -730,11 +908,22 @@ export function ChatInterface({
 
     setReportDraft({ status: "saving" })
     try {
+      const matchedMemoryEntry = selectedMemoryEntry ?? findBestMemoryEntry(reportContent, comprehensiveProfile.memoryEntries)
+      const audience = selectedAudienceOverride || inferReportAudience(reportContent, matchedMemoryEntry)
+      const chosenTemplate = selectedTemplate ?? findBestReportTemplate(
+        comprehensiveProfile.reportTemplates,
+        audience,
+        matchedMemoryEntry,
+      )
+
       const response = await fetch("/api/reports/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: `Chat Report — ${new Date().toLocaleString()}`,
+          clientName: matchedMemoryEntry?.clientName,
+          templateId: chosenTemplate?.id,
+          audience,
           content: {
             transcript: reportContent,
             cards: workspaceCards,
@@ -759,10 +948,24 @@ export function ChatInterface({
       }
 
       const reportId = typeof payload?.report?.id === "string" ? payload.report.id : undefined
+      const enabledExports = Array.isArray(payload?.enabledExports)
+        ? payload.enabledExports.filter((item: unknown): item is string => typeof item === "string")
+        : undefined
+
+      const saveContextParts = [
+        chosenTemplate?.name ? `template: ${chosenTemplate.name}` : null,
+        matchedMemoryEntry?.clientName ? `client: ${matchedMemoryEntry.clientName}` : null,
+        audience ? `audience: ${formatReportAudienceLabel(audience)}` : null,
+      ].filter((item): item is string => Boolean(item))
+
       setReportDraft({
         status: "saved",
-        message: "Report saved.",
+        message:
+          saveContextParts.length > 0
+            ? `Report saved (${saveContextParts.join(" · ")}).`
+            : "Report saved.",
         reportId,
+        enabledExports,
       })
     } catch {
       setReportDraft({
@@ -771,6 +974,14 @@ export function ChatInterface({
       })
     }
   }
+
+  const reportDownloadHref = useMemo(() => {
+    if (!reportDraft.reportId) {
+      return null
+    }
+    const format = resolvePreferredExportFormat(reportDraft.enabledExports)
+    return `/api/reports/${reportDraft.reportId}/download?format=${format}`
+  }, [reportDraft.reportId, reportDraft.enabledExports])
 
   if (!hasConversation) {
     return (
@@ -1293,6 +1504,59 @@ export function ChatInterface({
           <p className="text-xs text-muted-foreground">
             Save the AI's analysis as a structured investor report you can download and share.
           </p>
+
+          <div className="mt-3 space-y-2.5">
+            <label className="block text-[11px] text-muted-foreground">
+              Client context
+              <select
+                value={selectedMemoryEntryId}
+                onChange={(event) => setSelectedMemoryEntryId(event.target.value)}
+                className="mt-1 h-8 w-full rounded-md border border-border/60 bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">Auto-detect from chat</option>
+                {comprehensiveProfile.memoryEntries.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.clientName.trim() || "Untitled client memory"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-[11px] text-muted-foreground">
+              Report template
+              <select
+                value={selectedTemplateId}
+                onChange={(event) => setSelectedTemplateId(event.target.value)}
+                className="mt-1 h-8 w-full rounded-md border border-border/60 bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">Auto-select best template</option>
+                {comprehensiveProfile.reportTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {(template.name.trim() || "Untitled template") +
+                      ` (${formatReportAudienceLabel(template.audience)})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-[11px] text-muted-foreground">
+              Audience
+              <select
+                value={selectedAudienceOverride}
+                onChange={(event) =>
+                  setSelectedAudienceOverride(event.target.value as "" | ComprehensiveProfileReportAudience)
+                }
+                className="mt-1 h-8 w-full rounded-md border border-border/60 bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">Auto-infer from chat</option>
+                <option value="client">Client</option>
+                <option value="social">Social</option>
+                <option value="investor">Investor</option>
+                <option value="executive">Executive</option>
+              </select>
+            </label>
+          </div>
+
           <Button
             type="button"
             onClick={saveReportDraft}
@@ -1309,9 +1573,9 @@ export function ChatInterface({
             </p>
           ) : null}
 
-          {reportDraft.reportId ? (
+          {reportDownloadHref ? (
             <Link
-              href={`/api/reports/${reportDraft.reportId}/download`}
+              href={reportDownloadHref}
               className="mt-2 inline-block text-xs text-primary underline"
             >
               Download report
