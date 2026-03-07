@@ -1,6 +1,7 @@
 import { getRequestId } from "@/lib/api-errors"
-import { getReport } from "@/lib/runtime-store"
 import { hasTierAccess } from "@/lib/tier-access"
+import { getSyncedUser } from "@/lib/auth/sync"
+import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,6 +10,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const requestId = getRequestId(request)
   const url = new URL(request.url)
   const requestedFormat = url.searchParams.get("format") ?? "pdf"
+  const user = await getSyncedUser()
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized", requestId }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
   if (!await hasTierAccess(request, "team")) {
     return new Response(JSON.stringify({ error: "Team tier required", requestId }), {
       status: 403,
@@ -17,7 +27,25 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const { id } = await context.params
-  const report = getReport(id)
+  const teamId = user.profile?.teamId
+  const report = await prisma.assistantReport.findFirst({
+    where: teamId
+      ? {
+          id,
+          OR: [{ userId: user.id }, { teamId }],
+        }
+      : {
+          id,
+          userId: user.id,
+        },
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
+      payload: true,
+    },
+  })
+
   if (!report) {
     return new Response(JSON.stringify({ error: "Report not found", requestId }), {
       status: 404,
@@ -50,7 +78,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
   }
 
-  const content = `Entrestate Report\n\nTitle: ${report.title}\nGenerated: ${report.createdAt}\n\n${JSON.stringify(report.payload, null, 2)}`
+  const content = `Entrestate Report\n\nTitle: ${report.title}\nGenerated: ${report.createdAt.toISOString()}\n\n${JSON.stringify(report.payload, null, 2)}`
 
   if (requestedFormat === "json") {
     return new Response(JSON.stringify(report.payload, null, 2), {

@@ -84,6 +84,7 @@ model Team {
   knowledgeSources KnowledgeSource[]
   apiKeys   ApiKey[]
   userProfiles UserProfile[]
+  assistantReports AssistantReport[]
 }
 
 model User {
@@ -98,6 +99,24 @@ model User {
   chatSessions ChatSession[]
   decisionObjects DecisionObject[]
   apiKeys     ApiKey[]
+  assistantReports AssistantReport[]
+}
+
+model AssistantReport {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  teamId    String?  @map("team_id")
+  title     String
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+  team Team? @relation(fields: [teamId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([teamId, createdAt])
+  @@map("assistant_reports")
 }
 
 model TeamMember {
@@ -399,4 +418,3 @@ model AuditEvent {
   @@index([entityId])
   @@map("audit_events")
 }
-

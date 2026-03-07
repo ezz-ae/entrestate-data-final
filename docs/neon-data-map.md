@@ -21,6 +21,7 @@ Neon
   ├─ investor_override_audit          ─→ /api/*/override
   ├─ system_healthcheck               ─→ /api/market-score/healthcheck
   ├─ entrestate_master                ─→ /api/daas + /api/data-scientist/dataset/entrestate
+  ├─ assistant_reports                ─→ /api/reports/generate + /api/reports/[id]/download
   └─ media_enrichment                 ─→ /api/seq/project-library → /agents (Media Creator)
 ```
 
@@ -80,6 +81,13 @@ Neon
   - Used by:
     - `lib/daas/data.ts` → `app/api/daas/route.ts`
     - `app/api/data-scientist/dataset/entrestate/route.ts`
+
+### Team report persistence
+- **assistant_reports** (table)
+  - Durable AI-generated report storage (title + payload + owner/team context).
+  - Used by:
+    - `app/api/reports/generate/route.ts`
+    - `app/api/reports/[id]/download/route.ts`
 
 ### Media assets
 - **media_enrichment** (table)

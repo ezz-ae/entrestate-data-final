@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getRequestId } from "@/lib/api-errors"
-import { saveReport } from "@/lib/runtime-store"
 import { hasTierAccess } from "@/lib/tier-access"
 import { getSyncedUser } from "@/lib/auth/sync"
 import { prisma } from "@/lib/prisma"
@@ -28,13 +27,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Team tier required", requestId }, { status: 403 })
   }
 
+  const user = await getSyncedUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 })
+  }
+
   const body = await request.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid report payload", requestId }, { status: 400 })
   }
 
-  const user = await getSyncedUser()
   let comprehensiveProfile = DEFAULT_COMPREHENSIVE_PROFILE
 
   if (user?.id) {
@@ -74,9 +77,19 @@ export async function POST(request: Request) {
     },
   }
 
-  const report = saveReport({
-    title: reportTitle,
-    payload: reportPayload,
+  const report = await prisma.assistantReport.create({
+    data: {
+      userId: user.id,
+      teamId: user.profile?.teamId ?? null,
+      title: reportTitle,
+      payload: reportPayload,
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      title: true,
+      payload: true,
+    },
   })
 
   return NextResponse.json({ report, enabledExports, requestId })
