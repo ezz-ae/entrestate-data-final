@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server"
+import { listProperties } from "@/lib/decision-infrastructure"
+import type { PropertyFilters } from "@/lib/decision-infrastructure"
+
+export const dynamic = "force-dynamic"
+
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams
+
+  const sortBy = (params.get("sortBy") ?? "god_metric") as "god_metric" | "price" | "yield" | "reliability"
+  const page = Math.max(1, Number(params.get("page") ?? "1") || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") ?? "25") || 25))
+
+  const filters: PropertyFilters = {}
+  if (params.get("area")) filters.area = params.get("area")!
+  if (params.get("developer")) filters.developer = params.get("developer")!
+  if (params.get("timing")) filters.timingSignal = params.get("timing") as PropertyFilters["timingSignal"]
+  if (params.get("stress")) filters.stressGradeMin = params.get("stress") as PropertyFilters["stressGradeMin"]
+  if (params.get("minPrice")) filters.budgetMinAed = Number(params.get("minPrice"))
+  if (params.get("maxPrice")) filters.budgetMaxAed = Number(params.get("maxPrice"))
+  if (params.get("bedsMin")) filters.bedsMin = Number(params.get("bedsMin"))
+  if (params.get("bedsMax")) filters.bedsMax = Number(params.get("bedsMax"))
+  if (params.get("goldenVisa") === "true") filters.goldenVisaRequired = true
+
+  try {
+    const result = await listProperties({ filters, sortBy, page, pageSize })
+    return NextResponse.json(result)
+  } catch {
+    return NextResponse.json({ projects: [], total: 0, page: 1, pageSize, data_as_of: new Date().toISOString() })
+  }
+}

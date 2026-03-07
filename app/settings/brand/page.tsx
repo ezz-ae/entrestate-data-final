@@ -1,26 +1,65 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
-import { Palette, Image, BadgeCheck } from "lucide-react"
-
-const brandCards = [
-  {
-    title: "Logo + Marks",
-    detail: "Primary mark, monochrome, and favicon exports.",
-    icon: Image,
-  },
-  {
-    title: "Color System",
-    detail: "Primary, accent, and neutral palette applied to artifacts.",
-    icon: Palette,
-  },
-  {
-    title: "Verification Badge",
-    detail: "Tier badge and provenance stamp on outputs.",
-    icon: BadgeCheck,
-  },
-]
+import { Palette, Image, BadgeCheck, Save, Loader2, Check, Lock } from "lucide-react"
 
 export default function BrandSettingsPage() {
+  const [companyName, setCompanyName] = useState("")
+  const [accentColor, setAccentColor] = useState("#2f5aa6")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [tier, setTier] = useState("free")
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.inferredSignals?.comprehensiveProfile?.branding) {
+          const branding = data.inferredSignals.comprehensiveProfile.branding
+          setCompanyName(branding.companyName ?? "")
+          setAccentColor(branding.accentColor ?? "#2f5aa6")
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const isLocked = tier === "free" || tier === "pro"
+
+  async function saveBrand() {
+    setSaving(true)
+    setSaved(false)
+    try {
+      const res = await fetch("/api/profile")
+      const current = res.ok ? await res.json() : {}
+      const signals = current.inferredSignals ?? {}
+      const comprehensive = signals.comprehensiveProfile ?? {}
+
+      await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inferredSignals: {
+            ...signals,
+            comprehensiveProfile: {
+              ...comprehensive,
+              branding: { companyName, accentColor },
+            },
+          },
+        }),
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      // Silent failure
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <main id="main-content">
       <Navbar />
@@ -34,15 +73,149 @@ export default function BrandSettingsPage() {
             </p>
           </header>
 
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {brandCards.map((card) => (
-              <div key={card.title} className="rounded-2xl border border-border/70 bg-card/70 p-6">
-                <card.icon className="h-5 w-5 text-accent" />
-                <h2 className="mt-4 text-lg font-semibold text-foreground">{card.title}</h2>
-                <p className="mt-2 text-sm text-muted-foreground">{card.detail}</p>
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="relative">
+              {isLocked && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 backdrop-blur-sm">
+                  <div className="text-center">
+                    <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm font-medium text-foreground">Team or Institutional tier required</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Upgrade to customize brand controls on artifacts.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Company identity */}
+                <div className="rounded-2xl border border-border/70 bg-card/70 p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Image className="h-5 w-5 text-accent" />
+                    <h2 className="text-lg font-semibold text-foreground">Company identity</h2>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs uppercase tracking-wider text-muted-foreground">Company name</label>
+                      <input
+                        type="text"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="Your company name"
+                        disabled={isLocked}
+                        className="mt-2 w-full rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                      />
+                    </div>
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/40 p-6 text-center">
+                      <Image className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Logo upload coming soon</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Color System */}
+                <div className="rounded-2xl border border-border/70 bg-card/70 p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Palette className="h-5 w-5 text-accent" />
+                    <h2 className="text-lg font-semibold text-foreground">Color system</h2>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs uppercase tracking-wider text-muted-foreground">Accent color</label>
+                      <div className="mt-2 flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={accentColor}
+                          onChange={(e) => setAccentColor(e.target.value)}
+                          disabled={isLocked}
+                          className="h-10 w-10 rounded-lg border border-border/60 cursor-pointer disabled:opacity-50"
+                        />
+                        <input
+                          type="text"
+                          value={accentColor}
+                          onChange={(e) => setAccentColor(e.target.value)}
+                          disabled={isLocked}
+                          className="flex-1 rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm text-foreground font-mono focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Preview</p>
+                      <div className="rounded-xl border border-border/60 bg-background/50 p-4 space-y-2">
+                        <div className="h-2 rounded-full" style={{ backgroundColor: accentColor, width: "60%" }} />
+                        <div className="h-2 rounded-full bg-muted" style={{ width: "80%" }} />
+                        <div className="h-2 rounded-full bg-muted" style={{ width: "40%" }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verification Badge */}
+                <div className="rounded-2xl border border-border/70 bg-card/70 p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BadgeCheck className="h-5 w-5 text-accent" />
+                    <h2 className="text-lg font-semibold text-foreground">Verification badge</h2>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center">
+                          <BadgeCheck className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">
+                          {tier === "institutional"
+                            ? "Institutional"
+                            : tier === "team"
+                              ? "Team"
+                              : tier === "pro"
+                                ? "Pro"
+                                : "Free"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        This badge appears on all generated artifacts and embedded widgets.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                      <p className="text-xs text-muted-foreground">
+                        {isLocked
+                          ? '"Powered by Entrestate" branding is permanent on Free and Pro tiers.'
+                          : 'Custom branding replaces default "Powered by Entrestate" on all outputs.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            ))}
-          </section>
+
+              {!isLocked && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={saveBrand}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl bg-foreground text-background px-6 py-2.5 text-sm font-medium transition hover:bg-foreground/90 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                      </>
+                    ) : saved ? (
+                      <>
+                        <Check className="h-4 w-4" /> Saved
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" /> Save brand
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <Footer />

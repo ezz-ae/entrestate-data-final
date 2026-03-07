@@ -56,6 +56,7 @@ import {
   loadChatSession,
   saveChatMessage,
 } from "@/lib/copilot/persistence"
+import { getUserProfile } from "@/lib/profile/queries"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -245,15 +246,41 @@ export async function POST(request: Request) {
       throw new Error("Copilot model is not configured. Set GEMINI_KEY, AI_GATEWAY_API_KEY, or OPENAI_API_KEY.")
     }
 
+    // Load user profile for personalized system context
+    let profileContext = "No profile data available — ask the user about their preferences."
+    if (userId) {
+      try {
+        const profile = await getUserProfile(userId)
+        if (profile) {
+          const riskLabel = profile.riskBias >= 0.8 ? "aggressive" : profile.riskBias >= 0.6 ? "balanced" : "conservative"
+          const yieldLabel = profile.yieldVsSafety >= 0.7 ? "yield-focused" : profile.yieldVsSafety <= 0.3 ? "safety-focused" : "balanced"
+          const parts: string[] = [
+            `Risk appetite: ${riskLabel} (${Math.round(profile.riskBias * 100)}%)`,
+            `Investment style: ${yieldLabel} (yield vs safety: ${Math.round(profile.yieldVsSafety * 100)}%)`,
+          ]
+          if (profile.horizon) parts.push(`Horizon: ${profile.horizon}`)
+          if (profile.preferredMarkets?.length) parts.push(`Preferred markets: ${profile.preferredMarkets.join(", ")}`)
+          const comp = profile.inferredSignals?.comprehensiveProfile
+          if (comp?.branding?.companyName) parts.push(`Company: ${comp.branding.companyName}`)
+          if (comp?.preferredClientTypes?.length) parts.push(`Client types: ${comp.preferredClientTypes.join(", ")}`)
+          profileContext = parts.join("\n")
+        }
+      } catch {
+        // Non-blocking — use default context
+      }
+    }
+
+    const systemPrompt = copilotSystemPrompt.replace("{USER_PROFILE_CONTEXT}", profileContext)
+
     const normalizedMessages = normalizeIncomingMessages(body.messages)
 
     const result = streamText({
       model,
-      system: copilotSystemPrompt,
+      system: systemPrompt,
       messages: await convertToModelMessages(normalizedMessages, { tools: toolset }),
       temperature: 0.3,
       stopWhen: stepCountIs(6),
-      toolChoice: "required",
+      toolChoice: "auto",
       tools: toolset,
       onFinish: async ({ text, toolCalls }) => {
         if (userId && (text || (toolCalls && toolCalls.length > 0))) {

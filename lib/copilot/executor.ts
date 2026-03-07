@@ -659,7 +659,50 @@ export async function executeGenerateDecisionObject(input: GenerateDecisionObjec
 export async function executeGenerateStrategicReport(input: GenerateStrategicReportInput): Promise<ToolEnvelope<DbRow>> {
   const context = await getEnterpriseStrategicContext()
   const narrative = context ? getStrategicNarrative(context) : "General market analysis."
-  
+
+  const focusFilter = input.focus_areas && input.focus_areas.length > 0
+    ? Prisma.sql`AND LOWER(COALESCE(final_area, area)) IN (${Prisma.join(input.focus_areas.map(a => Prisma.sql`LOWER(${a})`), ", ")})`
+    : Prisma.empty
+
+  const [marketOverview, topAreas, riskDistribution] = await Promise.all([
+    runQuery(Prisma.sql`
+      SELECT
+        COUNT(*)::int AS total_projects,
+        ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0)) AS avg_price,
+        ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
+        ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score,
+        COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_count,
+        COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_count
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+        ${focusFilter}
+    `),
+    runQuery(Prisma.sql`
+      SELECT
+        COALESCE(final_area, area) AS area,
+        COUNT(*)::int AS projects,
+        ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
+        ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+        ${focusFilter}
+      GROUP BY 1
+      HAVING COUNT(*) >= 3
+      ORDER BY avg_score DESC
+      LIMIT 10
+    `),
+    runQuery(Prisma.sql`
+      SELECT
+        l2_stress_test_grade AS grade,
+        COUNT(*)::int AS count
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l2_stress_test_grade IS NOT NULL
+        ${focusFilter}
+      GROUP BY 1
+      ORDER BY count DESC
+    `),
+  ])
+
   return {
     source: "generate_strategic_report",
     data_as_of: nowIso(),
@@ -668,6 +711,9 @@ export async function executeGenerateStrategicReport(input: GenerateStrategicRep
       strategic_intent: input.intent,
       profile_biases: context ? { risk: context.riskBias, yield: context.yieldVsSafety } : null,
       focus_areas: input.focus_areas ?? [],
+      market_overview: marketOverview[0] ?? null,
+      top_areas: topAreas,
+      risk_distribution: riskDistribution,
     }
   }
 }
@@ -675,35 +721,110 @@ export async function executeGenerateStrategicReport(input: GenerateStrategicRep
 export async function executeGenerateInvestmentRoadmap(input: GenerateInvestmentRoadmapInput): Promise<ToolEnvelope<DbRow>> {
   const context = await getEnterpriseStrategicContext()
   const horizon = context?.horizon || "10yr+"
-  
+  const isYieldFocused = context?.yieldVsSafety ? context.yieldVsSafety > 0.6 : false
+  const capital = input.initial_capital_aed
+  const years = input.target_horizon_years
+
+  // Query real market data for budget-appropriate projects
+  const [readyAssets, pipelineAssets, topYieldAreas] = await Promise.all([
+    runQuery(Prisma.sql`
+      SELECT name, COALESCE(final_area, area) AS area, l1_canonical_price, l1_canonical_yield,
+             l2_stress_test_grade, engine_god_metric
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l1_canonical_price <= ${capital * 0.5}
+        AND l1_confidence IN ('MEDIUM', 'HIGH')
+        AND l3_timing_signal = 'BUY'
+      ORDER BY ${isYieldFocused ? Prisma.sql`l1_canonical_yield` : Prisma.sql`engine_god_metric`} DESC NULLS LAST
+      LIMIT 5
+    `),
+    runQuery(Prisma.sql`
+      SELECT name, COALESCE(final_area, area) AS area, l1_canonical_price, l1_canonical_yield,
+             l2_stress_test_grade, engine_god_metric
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l1_canonical_price <= ${capital * 0.4}
+        AND l1_confidence IN ('MEDIUM', 'HIGH')
+        AND l2_stress_test_grade IN ('A', 'B')
+      ORDER BY l1_canonical_yield DESC NULLS LAST
+      LIMIT 5
+    `),
+    runQuery(Prisma.sql`
+      SELECT COALESCE(final_area, area) AS area,
+             ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
+             COUNT(*)::int AS projects
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+      GROUP BY 1
+      HAVING COUNT(*) >= 3
+      ORDER BY avg_yield DESC NULLS LAST
+      LIMIT 5
+    `),
+  ])
+
+  const milestones = [
+    { year: 1, action: "Acquire high-liquidity ready assets in BUY-signal areas", recommended_projects: readyAssets.slice(0, 3) },
+    { year: Math.min(3, years), action: "Reinvest rental income into off-plan pipeline with A/B stress grades", recommended_projects: pipelineAssets.slice(0, 3) },
+    { year: Math.min(5, years), action: "Portfolio rebalancing — exit underperformers, reallocate to top-yield areas", top_yield_areas: topYieldAreas },
+  ]
+
+  if (years > 5) {
+    milestones.push({ year: years, action: "Long-term exit strategy — liquidate mature assets, retain highest performers", recommended_projects: [], top_yield_areas: [] } as typeof milestones[number])
+  }
+
   return {
     source: "generate_investment_roadmap",
     data_as_of: nowIso(),
     memo: {
-      initial_capital: input.initial_capital_aed,
-      horizon_years: input.target_horizon_years,
+      initial_capital: capital,
+      horizon_years: years,
       profile_horizon: horizon,
-      strategy: context?.yieldVsSafety && context.yieldVsSafety > 0.6 ? "Aggressive Yield" : "Stable Appreciation",
-      milestones: [
-        { year: 1, action: "Acquire high-liquidity ready assets" },
-        { year: 3, action: "Reinvest rental income into off-plan pipeline" },
-        { year: 5, action: "Portfolio rebalancing based on yield drift" },
-      ]
+      strategy: isYieldFocused ? "Aggressive Yield" : "Stable Appreciation",
+      milestones,
     }
   }
 }
 
 export async function executeMonitorMarketSegments(input: MonitorMarketSegmentsInput): Promise<ToolEnvelope<DbRow>> {
+  const areaMetrics = await runQuery(Prisma.sql`
+    SELECT
+      COALESCE(final_area, area) AS area,
+      ROUND(AVG(l1_canonical_yield::numeric), 2) AS current_avg_yield,
+      COUNT(*)::int AS projects,
+      COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_signals,
+      COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_count,
+      ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score
+    FROM ${COPILOT_TABLE_SQL}
+    WHERE LOWER(COALESCE(final_area, area)) IN (${Prisma.join(input.areas.map(a => Prisma.sql`LOWER(${a})`), ", ")})
+      AND l1_canonical_price > 0
+      AND l1_confidence IN ('MEDIUM', 'HIGH')
+    GROUP BY 1
+  `)
+
+  const metricsMap = new Map(areaMetrics.map(r => [String(r.area).toLowerCase(), r]))
+
+  const rows = input.areas.map(area => {
+    const metrics = metricsMap.get(area.toLowerCase())
+    if (!metrics) {
+      return { area, status: "no_data", threshold: `${input.alert_threshold_yield}%`, current_avg_yield: null, alert_status: "UNKNOWN" }
+    }
+    const currentYield = typeof metrics.current_avg_yield === "number" ? metrics.current_avg_yield : 0
+    const alert = currentYield >= input.alert_threshold_yield ? "GREEN" : currentYield >= input.alert_threshold_yield * 0.8 ? "AMBER" : "RED"
+    return {
+      area: metrics.area,
+      status: "monitoring",
+      threshold: `${input.alert_threshold_yield}%`,
+      current_avg_yield: `${currentYield}%`,
+      projects: metrics.projects,
+      buy_signals: metrics.buy_signals,
+      safe_count: metrics.safe_count,
+      avg_score: metrics.avg_score,
+      alert_status: alert,
+    }
+  })
+
   return {
     source: "monitor_market_segments",
     data_as_of: nowIso(),
-    rows: input.areas.map(area => ({
-      area,
-      status: "monitoring",
-      threshold: `${input.alert_threshold_yield}% net yield`,
-      current_average: "6.8%",
-      alert_status: "GREEN"
-    }))
+    rows,
   }
 }
 

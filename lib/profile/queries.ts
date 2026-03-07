@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { UserProfile } from "./types"
+import { UserProfile, BehavioralSignal } from "./types"
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   // @ts-ignore
@@ -25,8 +25,36 @@ export async function upsertUserProfile(profile: Partial<UserProfile> & { userId
   return updated as UserProfile
 }
 
-export async function recordBehavioralSignal(userId: string, signal: any) {
-  // In a real system, this would append to inferredSignals JSON or a separate signals table
-  // For now, we'll just log it or update a counter
-  console.log(`Recording signal for user ${userId}:`, signal)
+export async function recordBehavioralSignal(userId: string, signal: BehavioralSignal) {
+  try {
+    const profile = await getUserProfile(userId)
+    if (!profile) return
+
+    const signals = (profile.inferredSignals as Record<string, unknown>) ?? {}
+    const behaviorLog = Array.isArray(signals.behaviorLog) ? signals.behaviorLog : []
+
+    // Keep last 100 signals
+    behaviorLog.push({
+      ...signal,
+      timestamp: signal.timestamp ?? new Date().toISOString(),
+    })
+    if (behaviorLog.length > 100) behaviorLog.splice(0, behaviorLog.length - 100)
+
+    // Aggregate counts
+    const signalCounts = (signals.signalCounts as Record<string, number>) ?? {}
+    const key = `${signal.type}:${signal.lens ?? signal.signal ?? "unknown"}`
+    signalCounts[key] = (signalCounts[key] ?? 0) + 1
+
+    await upsertUserProfile({
+      userId,
+      inferredSignals: {
+        ...signals,
+        behaviorLog,
+        signalCounts,
+        lastSignalAt: new Date().toISOString(),
+      },
+    })
+  } catch {
+    // Non-blocking — don't fail the request
+  }
 }
