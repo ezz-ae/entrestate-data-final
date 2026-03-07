@@ -74,9 +74,9 @@
   --accent-bg-emphasis: rgba(58, 111, 184, 0.2);
   --accent-shadow: rgba(58, 111, 184, 0.25);
   --accent-secondary: #2f9d73;
-  --font-sans: var(--font-space);
-  --font-serif: var(--font-fraunces);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-sans: var(--font-space, "Inter", system-ui, sans-serif);
+  --font-serif: var(--font-fraunces, "Iowan Old Style", Georgia, serif);
+  --font-mono: var(--font-jetbrains-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   background-color: transparent;
   color: var(--foreground);
   min-height: 100vh;

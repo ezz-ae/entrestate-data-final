@@ -1,13 +1,8 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Space_Grotesk, Fraunces, JetBrains_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { CopilotProvider } from "@/components/copilot-provider"
 import "./globals.css"
-
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space", weight: ["400", "500", "600", "700"] })
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", weight: ["400", "500", "600", "700"] })
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" })
 
 export const metadata: Metadata = {
   title: "Entrestate - UAE Real Estate Decision Desk",
@@ -34,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="bg-background">
-      <body className={`font-sans antialiased ${spaceGrotesk.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-sans antialiased">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none"

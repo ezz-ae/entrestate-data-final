@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { Suspense, useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Menu, X, ArrowRight } from "lucide-react"
@@ -192,7 +192,9 @@ export function Navbar() {
           </div>
         </div>
       </div>
-      <LlmSidebar />
+      <Suspense fallback={null}>
+        <LlmSidebar />
+      </Suspense>
     </>
   )
 }
