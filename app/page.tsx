@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 const SURFACES = [
   {
     icon: Sparkles,
-    label: "AI Decision Copilot",
+    label: "AI Decision Chat",
     description: "Describe your budget, goal, and constraints. Get a shortlist of scored projects with clear reasoning — not listings.",
     href: "/chat",
     cta: "Start analysis",
@@ -90,7 +90,7 @@ export default async function HomePage() {
               className="flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
             >
               <Sparkles className="h-4 w-4 text-primary" />
-              Ask AI Copilot
+              Open AI Chat
             </Link>
           </div>
         </section>

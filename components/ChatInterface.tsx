@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react"
-import { DefaultChatTransport } from "ai"
 import { useCopilot } from "@/components/copilot-provider"
 import {
   BarChart3,
@@ -37,8 +36,10 @@ import type {
 
 type ChatInterfaceProps = {
   id?: string
-  initialDailyLimit?: number | null
+  initialLimit?: number | null
   initialRemaining?: number | null
+  initialBlocked?: boolean
+  initialCooldownSecondsRemaining?: number | null
 }
 
 type WorkspaceCard = {
@@ -132,6 +133,16 @@ function formatMetric(value: number | null, decimals = 1) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
+}
+
+function formatCooldownDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
 }
 
 function inferReportAudience(
@@ -474,9 +485,10 @@ const slashCommands: SlashCommand[] = [
 ]
 
 export function ChatInterface({
-  id,
-  initialDailyLimit = 3,
-  initialRemaining = 3,
+  initialLimit = 20,
+  initialRemaining = 20,
+  initialBlocked = false,
+  initialCooldownSecondsRemaining = null,
 }: ChatInterfaceProps) {
   const [mounted, setMounted] = useState(false)
   const [input, setInput] = useState("")
@@ -485,8 +497,12 @@ export function ChatInterface({
     setMounted(true)
   }, [])
 
-  const [dailyLimit, setDailyLimit] = useState<number | null>(initialDailyLimit)
+  const [limit, setLimit] = useState<number | null>(initialLimit)
   const [remaining, setRemaining] = useState<number | null>(initialRemaining)
+  const [cooldownBlocked, setCooldownBlocked] = useState(initialBlocked)
+  const [cooldownSecondsRemaining, setCooldownSecondsRemaining] = useState<number | null>(
+    initialCooldownSecondsRemaining,
+  )
   const [limitMessage, setLimitMessage] = useState<string | null>(null)
   const [reportDraft, setReportDraft] = useState<ReportDraftResult>({ status: "idle" })
   const [shortlistResult, setShortlistResult] = useState<ShortlistResult>({ status: "idle" })
@@ -514,12 +530,19 @@ export function ChatInterface({
         const response = await fetch("/api/account/chat-usage", { cache: "no-store" })
         if (!response.ok) return
         const payload = (await response.json()) as {
-          usage?: { limit?: number | null; remaining?: number | null }
+          usage?: {
+            limit?: number | null
+            remaining?: number | null
+            blocked?: boolean
+            cooldownSecondsRemaining?: number | null
+          }
         }
         if (cancelled) return
         if (payload.usage) {
-          setDailyLimit(payload.usage.limit ?? null)
+          setLimit(payload.usage.limit ?? null)
           setRemaining(payload.usage.remaining ?? null)
+          setCooldownBlocked(Boolean(payload.usage.blocked))
+          setCooldownSecondsRemaining(payload.usage.cooldownSecondsRemaining ?? null)
         }
       } catch {
         // keep server defaults
@@ -530,7 +553,7 @@ export function ChatInterface({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [mounted])
 
   useEffect(() => {
     if (!mounted) return
@@ -569,10 +592,42 @@ export function ChatInterface({
     }
   }, [mounted])
 
-  const chatBlocked = dailyLimit !== null && (remaining ?? 0) <= 0
+  useEffect(() => {
+    if (!cooldownBlocked || !cooldownSecondsRemaining || cooldownSecondsRemaining <= 0) return
+
+    const interval = window.setInterval(() => {
+      setCooldownSecondsRemaining((current) => {
+        if (!current || current <= 1) {
+          setCooldownBlocked(false)
+          return 0
+        }
+        return current - 1
+      })
+    }, 1000)
+
+    return () => {
+      window.clearInterval(interval)
+    }
+  }, [cooldownBlocked, cooldownSecondsRemaining])
+
+  const chatBlocked = cooldownBlocked || (limit !== null && (remaining ?? 0) <= 0)
   const usageError = error?.message ?? ""
-  const isLimitError = usageError.includes("429") || usageError.toLowerCase().includes("daily limit")
-  const submitBlocked = status !== "ready" || input.trim().length === 0
+  const isLimitError =
+    usageError.includes("429") ||
+    usageError.toLowerCase().includes("cool") ||
+    usageError.toLowerCase().includes("limit")
+  const isBusy = status === "submitted" || status === "streaming"
+  const submitBlocked = isBusy || input.trim().length === 0 || chatBlocked
+  const usageStatusLabel = useMemo(() => {
+    if (limit === null) return "Unlimited · ⌘↵ to send"
+    if (chatBlocked) {
+      if (cooldownSecondsRemaining && cooldownSecondsRemaining > 0) {
+        return `Cooldown ${formatCooldownDuration(cooldownSecondsRemaining)} · ⌘↵ to send`
+      }
+      return "Cooldown active · ⌘↵ to send"
+    }
+    return `${Math.max(remaining ?? 0, 0)}/${limit} messages left · ⌘↵ to send`
+  }, [chatBlocked, cooldownSecondsRemaining, limit, remaining])
 
   const toolOutputs = useMemo(() => extractToolOutputs(messages as any[]), [messages])
   const workspaceCards = useMemo(() => deriveWorkspaceCards(toolOutputs), [toolOutputs])
@@ -750,19 +805,29 @@ export function ChatInterface({
   }, [slashQuery])
 
   const sendPrompt = async (prompt: string) => {
-    if (!prompt.trim() || status !== "ready") return
+    if (!prompt.trim() || isBusy) return
     if (chatBlocked) {
-      setLimitMessage("You have finished your daily limit for your current plan. Subscribe to continue.")
+      if (cooldownSecondsRemaining && cooldownSecondsRemaining > 0) {
+        setLimitMessage(
+          `Free usage is cooling down. You can send again in ${formatCooldownDuration(cooldownSecondsRemaining)}.`,
+        )
+      } else {
+        setLimitMessage("Free usage is cooling down. Please try again soon.")
+      }
       return
     }
 
     setLimitMessage(null)
     await sendMessage({ text: prompt })
 
-    if (dailyLimit !== null) {
+    if (limit !== null) {
       setRemaining((prev) => {
-        const current = prev ?? dailyLimit
-        return Math.max(current - 1, 0)
+        const current = prev ?? limit
+        const nextRemaining = Math.max(current - 1, 0)
+        if (nextRemaining === 0) {
+          setCooldownBlocked(true)
+        }
+        return nextRemaining
       })
     }
   }
@@ -991,7 +1056,7 @@ export function ChatInterface({
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
             <Sparkles className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Real Estate AI Copilot</h1>
+          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Real Estate AI Chat</h1>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
             Screen properties, compare markets, stress test investments, and generate investor memos — powered by live UAE data.
           </p>
@@ -1005,7 +1070,7 @@ export function ChatInterface({
               <button
                 key={card.label}
                 type="button"
-                disabled={status !== "ready" || chatBlocked}
+                disabled={isBusy || chatBlocked}
                 onClick={() => void sendPrompt(card.prompt)}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/70 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -1080,9 +1145,9 @@ export function ChatInterface({
                 <span className="hidden text-[11px] text-muted-foreground sm:block">· ⌘↵ to send</span>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
-                {dailyLimit !== null ? (
+                {limit !== null ? (
                   <p className="hidden text-xs text-muted-foreground sm:block">
-                    {Math.max(remaining ?? 0, 0)}/{dailyLimit} today
+                    {Math.max(remaining ?? 0, 0)}/{limit} left
                   </p>
                 ) : null}
                 <Button type="submit" disabled={submitBlocked}>
@@ -1096,12 +1161,12 @@ export function ChatInterface({
 
         {limitMessage ? (
           <p className="mt-3 text-sm text-amber-500">
-            {limitMessage} <Link href="/pricing" className="underline">Upgrade plan</Link>
+            {limitMessage} <Link href="/pricing" className="underline">Upgrade</Link>
           </p>
         ) : null}
         {isLimitError ? (
           <p className="mt-3 text-sm text-amber-500">
-            Daily limit reached. <Link href="/pricing" className="underline">Upgrade to continue</Link>
+            Free window is cooling down. <Link href="/pricing" className="underline">Upgrade for uninterrupted access</Link>
           </p>
         ) : null}
         {error && !isLimitError ? <p className="mt-3 text-sm text-red-400">{error.message}</p> : null}
@@ -1110,13 +1175,13 @@ export function ChatInterface({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
+    <div className="grid gap-5">
       <section className="overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5">
 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2.5">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            <p className="text-sm font-semibold text-foreground">AI Copilot</p>
+            <p className="text-sm font-semibold text-foreground">AI Chat</p>
             {dataFreshness ? (
               <span className="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground">
                 Data: {new Date(dataFreshness).toLocaleDateString()}
@@ -1133,9 +1198,9 @@ export function ChatInterface({
               variant="outline"
               size="sm"
               onClick={() => setCanvasOpen((current) => !current)}
-              className="h-7 px-2.5 text-xs xl:hidden"
+              className="h-7 px-2.5 text-xs"
             >
-              {canvasOpen ? "Hide" : "Canvas"}
+              {canvasOpen ? "Hide workspace" : "Open workspace"}
             </Button>
           </div>
         </div>
@@ -1148,7 +1213,7 @@ export function ChatInterface({
                 key={command.label}
                 type="button"
                 onClick={() => void sendPrompt(command.prompt)}
-                disabled={status !== "ready"}
+                disabled={isBusy}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Icon className="h-3 w-3" />
@@ -1162,7 +1227,7 @@ export function ChatInterface({
               key={suggestion}
               type="button"
               onClick={() => void sendPrompt(suggestion)}
-              disabled={status !== "ready"}
+              disabled={isBusy}
               className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-card/60 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/35 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               <WandSparkles className="h-3 w-3" />
@@ -1191,7 +1256,7 @@ export function ChatInterface({
                 <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-background/95 via-card/90 to-background/85 px-4 py-3.5 text-sm text-foreground shadow-[0_16px_28px_-18px_rgba(56,189,248,0.3)]">
                   <p className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <Sparkles className="h-2.5 w-2.5" />
-                    Copilot
+                    AI
                   </p>
                   <p className="whitespace-pre-wrap leading-relaxed">
                     {messageText(message) || "Running analysis..."}
@@ -1259,9 +1324,7 @@ export function ChatInterface({
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              {dailyLimit === null
-                ? "Unlimited · ⌘↵ to send"
-                : `${Math.max(remaining ?? 0, 0)}/${dailyLimit} today · ⌘↵ to send`}
+              {usageStatusLabel}
             </p>
             <Button type="submit" disabled={submitBlocked} className="gap-1.5">
               <Send className="h-3.5 w-3.5" />
@@ -1272,20 +1335,20 @@ export function ChatInterface({
 
         {limitMessage ? (
           <p className="mt-3 text-sm text-amber-600">
-            {limitMessage} <Link href="/pricing" className="underline">Subscribe</Link>
+            {limitMessage} <Link href="/pricing" className="underline">Upgrade</Link>
           </p>
         ) : null}
 
         {isLimitError ? (
           <p className="mt-3 text-sm text-amber-600">
-            You have finished your daily limit for your current plan. <Link href="/pricing" className="underline">Subscribe</Link>
+            Free window is cooling down. <Link href="/pricing" className="underline">Upgrade for uninterrupted access</Link>
           </p>
         ) : null}
 
         {error && !isLimitError ? <p className="mt-3 text-sm text-red-500">{error.message}</p> : null}
       </section>
 
-      <aside className={`overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5 ${canvasOpen ? "block" : "hidden xl:block"}`}>
+      <aside className={`overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5 ${canvasOpen ? "block" : "hidden"}`}>
 
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

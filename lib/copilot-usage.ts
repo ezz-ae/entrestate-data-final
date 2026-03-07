@@ -2,7 +2,26 @@ import "server-only"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
-export const FREE_COPILOT_DAILY_LIMIT = 3
+const DEFAULT_FREE_WINDOW_LIMIT = 20
+const DEFAULT_FREE_COOLDOWN_HOURS = 2
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export const FREE_COPILOT_WINDOW_LIMIT = parsePositiveInteger(
+  process.env.FREE_COPILOT_WINDOW_LIMIT,
+  DEFAULT_FREE_WINDOW_LIMIT,
+)
+export const FREE_COPILOT_COOLDOWN_HOURS = parsePositiveInteger(
+  process.env.FREE_COPILOT_COOLDOWN_HOURS,
+  DEFAULT_FREE_COOLDOWN_HOURS,
+)
+
+// Backward compatibility for existing imports.
+export const FREE_COPILOT_DAILY_LIMIT = FREE_COPILOT_WINDOW_LIMIT
 
 export type CopilotDailyUsage = {
   accountKey: string
@@ -10,7 +29,19 @@ export type CopilotDailyUsage = {
   used: number
   limit: number | null
   remaining: number | null
+  blocked: boolean
+  resetAt: string | null
+  cooldownUntil: string | null
+  cooldownSecondsRemaining: number | null
 }
+
+type FreeUsageWindowRow = {
+  window_started_at: Date | string
+  messages_count: number
+  cooldown_until: Date | string | null
+}
+
+type CopilotTier = "free" | "pro" | "team" | "institutional"
 
 let ensureUsageTablesPromise: Promise<void> | null = null
 
@@ -19,8 +50,108 @@ function applyLimit(used: number, limit: number | null): CopilotDailyUsage["rema
   return Math.max(limit - used, 0)
 }
 
-export function getCopilotDailyLimit(tier: "free" | "pro" | "team" | "institutional") {
+function getWindowDurationMs() {
+  return FREE_COPILOT_COOLDOWN_HOURS * 60 * 60 * 1000
+}
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function buildUnlimitedUsage(accountKey: string): CopilotDailyUsage {
+  return {
+    accountKey,
+    date: new Date().toISOString().slice(0, 10),
+    used: 0,
+    limit: null,
+    remaining: null,
+    blocked: false,
+    resetAt: null,
+    cooldownUntil: null,
+    cooldownSecondsRemaining: null,
+  }
+}
+
+function buildFreeUsage(
+  accountKey: string,
+  now: Date,
+  values: {
+    used: number
+    blocked: boolean
+    resetAt: Date | null
+    cooldownUntil: Date | null
+  },
+): CopilotDailyUsage {
+  const limit = FREE_COPILOT_WINDOW_LIMIT
+  const clampedUsed = Math.max(0, Math.min(values.used, limit))
+  const cooldownSecondsRemaining =
+    values.blocked && values.cooldownUntil
+      ? Math.max(Math.ceil((values.cooldownUntil.getTime() - now.getTime()) / 1000), 0)
+      : null
+
+  return {
+    accountKey,
+    date: now.toISOString().slice(0, 10),
+    used: clampedUsed,
+    limit,
+    remaining: values.blocked ? 0 : applyLimit(clampedUsed, limit),
+    blocked: values.blocked,
+    resetAt: values.resetAt ? values.resetAt.toISOString() : null,
+    cooldownUntil: values.cooldownUntil ? values.cooldownUntil.toISOString() : null,
+    cooldownSecondsRemaining,
+  }
+}
+
+function resolveFreeUsageFromRow(accountKey: string, row: FreeUsageWindowRow | null, now: Date): CopilotDailyUsage {
+  if (!row) {
+    return buildFreeUsage(accountKey, now, {
+      used: 0,
+      blocked: false,
+      resetAt: null,
+      cooldownUntil: null,
+    })
+  }
+
+  const windowDurationMs = getWindowDurationMs()
+  const windowStartedAt = toDate(row.window_started_at) ?? now
+  const cooldownUntil = toDate(row.cooldown_until)
+  const windowEndsAt = new Date(windowStartedAt.getTime() + windowDurationMs)
+  const messagesUsed = Number.isFinite(row.messages_count) ? row.messages_count : 0
+
+  if (cooldownUntil && cooldownUntil.getTime() > now.getTime()) {
+    return buildFreeUsage(accountKey, now, {
+      used: FREE_COPILOT_WINDOW_LIMIT,
+      blocked: true,
+      resetAt: cooldownUntil,
+      cooldownUntil,
+    })
+  }
+
+  if (cooldownUntil || windowEndsAt.getTime() <= now.getTime()) {
+    return buildFreeUsage(accountKey, now, {
+      used: 0,
+      blocked: false,
+      resetAt: null,
+      cooldownUntil: null,
+    })
+  }
+
+  return buildFreeUsage(accountKey, now, {
+    used: messagesUsed,
+    blocked: false,
+    resetAt: windowEndsAt,
+    cooldownUntil: null,
+  })
+}
+
+export function getCopilotDailyLimit(tier: CopilotTier) {
   return tier === "free" ? FREE_COPILOT_DAILY_LIMIT : null
+}
+
+export function getCopilotCooldownHours(tier: CopilotTier) {
+  return tier === "free" ? FREE_COPILOT_COOLDOWN_HOURS : null
 }
 
 export function getAnonymousCopilotAccountKey(request: Request) {
@@ -34,13 +165,14 @@ async function ensureUsageTables() {
   if (!ensureUsageTablesPromise) {
     ensureUsageTablesPromise = (async () => {
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS copilot_daily_usage (
-          account_key TEXT NOT NULL,
-          usage_date DATE NOT NULL,
+        CREATE TABLE IF NOT EXISTS copilot_usage_windows (
+          account_key TEXT PRIMARY KEY,
+          window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           messages_count INTEGER NOT NULL DEFAULT 0,
+          cooldown_until TIMESTAMPTZ,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (account_key, usage_date)
+          CHECK (messages_count >= 0)
         )
       `)
     })()
@@ -49,69 +181,171 @@ async function ensureUsageTables() {
   await ensureUsageTablesPromise
 }
 
-export async function getCopilotDailyUsage(accountKey: string, tier: "free" | "pro" | "team" | "institutional") {
+export async function getCopilotDailyUsage(accountKey: string, tier: CopilotTier) {
   const normalizedKey = accountKey.trim()
+  const now = new Date()
+
+  if (tier !== "free") {
+    return buildUnlimitedUsage(normalizedKey)
+  }
+
   if (!normalizedKey) {
-    return {
-      accountKey: "",
-      date: new Date().toISOString().slice(0, 10),
+    return buildFreeUsage("", now, {
       used: 0,
-      limit: getCopilotDailyLimit(tier),
-      remaining: getCopilotDailyLimit(tier),
-    } satisfies CopilotDailyUsage
+      blocked: false,
+      resetAt: null,
+      cooldownUntil: null,
+    })
   }
 
   await ensureUsageTables()
 
-  const rows = await prisma.$queryRaw<Array<{ usage_date: string; messages_count: number }>>(Prisma.sql`
+  const rows = await prisma.$queryRaw<FreeUsageWindowRow[]>(Prisma.sql`
     SELECT
-      usage_date::text,
-      messages_count
-    FROM copilot_daily_usage
+      window_started_at,
+      messages_count,
+      cooldown_until
+    FROM copilot_usage_windows
     WHERE account_key = ${normalizedKey}
-      AND usage_date = CURRENT_DATE
     LIMIT 1
   `)
 
-  const used = rows[0]?.messages_count ?? 0
-  const date = rows[0]?.usage_date ?? new Date().toISOString().slice(0, 10)
-  const limit = getCopilotDailyLimit(tier)
-
-  return {
-    accountKey: normalizedKey,
-    date,
-    used,
-    limit,
-    remaining: applyLimit(used, limit),
-  } satisfies CopilotDailyUsage
+  return resolveFreeUsageFromRow(normalizedKey, rows[0] ?? null, now)
 }
 
-export async function incrementCopilotDailyUsage(accountKey: string, tier: "free" | "pro" | "team" | "institutional") {
+export async function consumeCopilotUsage(accountKey: string, tier: CopilotTier): Promise<{ allowed: boolean; usage: CopilotDailyUsage }> {
   const normalizedKey = accountKey.trim()
   if (!normalizedKey) {
-    throw new Error("accountKey is required to increment copilot usage")
+    throw new Error("accountKey is required to consume copilot usage")
+  }
+
+  if (tier !== "free") {
+    return {
+      allowed: true,
+      usage: buildUnlimitedUsage(normalizedKey),
+    }
   }
 
   await ensureUsageTables()
 
-  const rows = await prisma.$queryRaw<Array<{ usage_date: string; messages_count: number }>>(Prisma.sql`
-    INSERT INTO copilot_daily_usage (account_key, usage_date, messages_count, updated_at)
-    VALUES (${normalizedKey}, CURRENT_DATE, 1, NOW())
-    ON CONFLICT (account_key, usage_date) DO UPDATE
-      SET messages_count = copilot_daily_usage.messages_count + 1,
+  const usage = await prisma.$transaction(async (tx) => {
+    const now = new Date()
+    const windowDurationMs = getWindowDurationMs()
+
+    const rows = await tx.$queryRaw<FreeUsageWindowRow[]>(Prisma.sql`
+      SELECT
+        window_started_at,
+        messages_count,
+        cooldown_until
+      FROM copilot_usage_windows
+      WHERE account_key = ${normalizedKey}
+      FOR UPDATE
+    `)
+
+    const row = rows[0]
+
+    if (!row) {
+      const resetAt = new Date(now.getTime() + windowDurationMs)
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO copilot_usage_windows (
+          account_key,
+          window_started_at,
+          messages_count,
+          cooldown_until,
+          updated_at,
+          created_at
+        )
+        VALUES (${normalizedKey}, ${now}, 1, NULL, NOW(), NOW())
+      `)
+
+      return {
+        allowed: true,
+        usage: buildFreeUsage(normalizedKey, now, {
+          used: 1,
+          blocked: false,
+          resetAt,
+          cooldownUntil: null,
+        }),
+      }
+    }
+
+    const windowStartedAt = toDate(row.window_started_at) ?? now
+    const cooldownUntil = toDate(row.cooldown_until)
+    const currentUsed = Number.isFinite(row.messages_count) ? Math.max(0, row.messages_count) : 0
+    const windowExpired = windowStartedAt.getTime() + windowDurationMs <= now.getTime()
+
+    if (cooldownUntil && cooldownUntil.getTime() > now.getTime()) {
+      return {
+        allowed: false,
+        usage: buildFreeUsage(normalizedKey, now, {
+          used: FREE_COPILOT_WINDOW_LIMIT,
+          blocked: true,
+          resetAt: cooldownUntil,
+          cooldownUntil,
+        }),
+      }
+    }
+
+    if (cooldownUntil || windowExpired) {
+      const nextUsed = 1
+      const nextCooldown = nextUsed >= FREE_COPILOT_WINDOW_LIMIT
+        ? new Date(now.getTime() + windowDurationMs)
+        : null
+      const nextResetAt = nextCooldown ?? new Date(now.getTime() + windowDurationMs)
+
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE copilot_usage_windows
+        SET
+          window_started_at = ${now},
+          messages_count = ${Math.min(nextUsed, FREE_COPILOT_WINDOW_LIMIT)},
+          cooldown_until = ${nextCooldown},
           updated_at = NOW()
-    RETURNING usage_date::text, messages_count
-  `)
+        WHERE account_key = ${normalizedKey}
+      `)
 
-  const used = rows[0]?.messages_count ?? 1
-  const date = rows[0]?.usage_date ?? new Date().toISOString().slice(0, 10)
-  const limit = getCopilotDailyLimit(tier)
+      return {
+        allowed: true,
+        usage: buildFreeUsage(normalizedKey, now, {
+          used: nextUsed,
+          blocked: Boolean(nextCooldown),
+          resetAt: nextResetAt,
+          cooldownUntil: nextCooldown,
+        }),
+      }
+    }
 
+    const nextUsed = currentUsed + 1
+    const shouldStartCooldown = nextUsed >= FREE_COPILOT_WINDOW_LIMIT
+    const nextCooldown = shouldStartCooldown ? new Date(now.getTime() + windowDurationMs) : null
+    const storedUsed = Math.min(nextUsed, FREE_COPILOT_WINDOW_LIMIT)
+    const nextResetAt = nextCooldown ?? new Date(windowStartedAt.getTime() + windowDurationMs)
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE copilot_usage_windows
+      SET
+        messages_count = ${storedUsed},
+        cooldown_until = ${nextCooldown},
+        updated_at = NOW()
+      WHERE account_key = ${normalizedKey}
+    `)
+
+    return {
+      allowed: true,
+      usage: buildFreeUsage(normalizedKey, now, {
+        used: storedUsed,
+        blocked: shouldStartCooldown,
+        resetAt: nextResetAt,
+        cooldownUntil: nextCooldown,
+      }),
+    }
+  })
+
+  return usage
+}
+
+export async function incrementCopilotDailyUsage(accountKey: string, tier: CopilotTier) {
+  const { usage } = await consumeCopilotUsage(accountKey, tier)
   return {
-    accountKey: normalizedKey,
-    date,
-    used,
-    limit,
-    remaining: applyLimit(used, limit),
+    ...usage,
   } satisfies CopilotDailyUsage
 }

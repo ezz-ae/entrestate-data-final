@@ -176,7 +176,7 @@ export async function sendExplorerChatMessage(options: {
       id: `assistant-${Date.now()}`,
       role: "assistant",
       content: isLimitError
-        ? "You have finished your daily limit for your current plan. Subscribe to continue: /pricing"
+        ? "Free usage is cooling down. Try again shortly, or upgrade for uninterrupted access: /pricing"
         : "I could not process this request right now. Please try again.",
       timestamp: new Date().toISOString(),
       suggestions: options.quickSuggestions.slice(0, 3),

@@ -51,10 +51,10 @@ export default async function ReportsPage() {
             </div>
             <h3 className="text-lg font-medium text-foreground">No reports found</h3>
             <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-              Start a Decision Session in the AI Copilot to generate your first institutional report.
+              Start a decision session in AI chat to generate your first institutional report.
             </p>
             <a href="/chat" className="mt-6 rounded-lg bg-accent px-6 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent/90 transition-colors">
-              Go to Copilot
+              Open AI chat
             </a>
           </div>
         ) : (

@@ -47,7 +47,7 @@ function MessageBubble({ message }: { message: any }) {
 }
 
 export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }) {
-  const { messages, sendMessage, status, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
+  const { messages, sendMessage, status, error, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
   const [input, setInput] = useState("")
   const [isDesktopViewport, setIsDesktopViewport] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -139,13 +139,13 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
     }
   }
 
-  const isLoading = status !== "ready"
+  const isBusy = status === "submitted" || status === "streaming"
 
   const submitMessage = async (event?: FormEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>) => {
     event?.preventDefault()
 
     const trimmedInput = input.trim()
-    if (!trimmedInput || isLoading) {
+    if (!trimmedInput || isBusy) {
       return
     }
 
@@ -221,7 +221,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
         >
           {isSidebarOpen ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
           <span className="absolute left-full ml-4 rounded bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 z-50 pointer-events-none whitespace-nowrap">
-            Copilot
+            Chat
           </span>
         </Button>
 
@@ -304,7 +304,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
       {effectiveOpenPanel && (
         <div className="flex flex-1 flex-col h-full bg-background min-w-0">
           
-          {/* Chat Panel (Copilot) */}
+          {/* Chat Panel */}
           {effectiveOpenPanel === "chat" ? (
             <div className="flex flex-col h-full animate-in slide-in-from-left-5 duration-300">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -321,7 +321,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                     </Button>
                   ) : null}
                   <Sparkles className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold">Copilot</h2>
+                  <h2 className="text-sm font-semibold">Chat</h2>
                 </div>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCloseSidebar}>
                   <X className="h-4 w-4" />
@@ -397,7 +397,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                 ) : (
                   <div className="space-y-6">
                     {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
-                    {isLoading && (
+                    {isBusy && (
                       <div className="flex justify-start">
                         <div className="bg-muted/60 rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm">
                           <div className="flex gap-1.5 items-center">
@@ -435,12 +435,17 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                   <Button
                     type="submit"
                     size="icon"
-                    disabled={isLoading || !input.trim()}
+                    disabled={isBusy || !input.trim()}
                     className="absolute bottom-3 right-3 h-10 w-10 rounded-lg transition-transform hover:scale-105 active:scale-95"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
+                {error ? (
+                  <p className="mt-2 text-xs text-amber-600">
+                    {error.message}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : (

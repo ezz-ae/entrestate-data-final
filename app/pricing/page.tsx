@@ -50,9 +50,9 @@ const FEATURE_GROUPS: {
   rows: { label: string; values: [FeatureValue, FeatureValue, FeatureValue, FeatureValue] }[]
 }[] = [
   {
-    group: "AI Copilot",
+    group: "AI Chat",
     rows: [
-      { label: "Daily AI sessions", values: ["3 / day", "Unlimited", "Unlimited", "Unlimited"] },
+      { label: "AI messages", values: ["Free window + cooldown", "Unlimited", "Unlimited", "Unlimited"] },
       { label: "Deal screener", values: [false, true, true, true] },
       { label: "Price reality check", values: [false, true, true, true] },
       { label: "Area risk brief", values: [false, true, true, true] },

@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/navbar"
 import { ChatInterface } from "@/components/ChatInterface"
 import { getCurrentEntitlement } from "@/lib/account-entitlement"
-import { FREE_COPILOT_DAILY_LIMIT, getCopilotDailyUsage } from "@/lib/copilot-usage"
+import { getCopilotDailyLimit, getCopilotDailyUsage } from "@/lib/copilot-usage"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 
@@ -34,8 +34,12 @@ export default async function ChatPage({
         accountKey: "",
         date: new Date().toISOString().slice(0, 10),
         used: 0,
-        limit: entitlement.tier === "free" ? FREE_COPILOT_DAILY_LIMIT : null,
-        remaining: entitlement.tier === "free" ? FREE_COPILOT_DAILY_LIMIT : null,
+        limit: getCopilotDailyLimit(entitlement.tier),
+        remaining: getCopilotDailyLimit(entitlement.tier),
+        blocked: false,
+        resetAt: null,
+        cooldownUntil: null,
+        cooldownSecondsRemaining: null,
       }
 
   return (
@@ -47,8 +51,10 @@ export default async function ChatPage({
         ) : null}
         <ChatInterface
           id={sessionId || undefined}
-          initialDailyLimit={usage.limit}
+          initialLimit={usage.limit}
           initialRemaining={usage.remaining}
+          initialBlocked={usage.blocked}
+          initialCooldownSecondsRemaining={usage.cooldownSecondsRemaining}
         />
       </div>
     </main>

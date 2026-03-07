@@ -5,9 +5,8 @@ import { getPublicErrorMessage, getRequestId } from "@/lib/api-errors"
 import { resolveCopilotModel } from "@/lib/ai-provider"
 import { getCurrentEntitlement } from "@/lib/account-entitlement"
 import {
-  FREE_COPILOT_DAILY_LIMIT,
+  consumeCopilotUsage,
   getAnonymousCopilotAccountKey,
-  incrementCopilotDailyUsage,
 } from "@/lib/copilot-usage"
 import {
   executeAreaRiskBrief,
@@ -282,11 +281,21 @@ function buildCompilerOutput(message: string) {
   }
 }
 
-function buildUsageHeaders(usage: { used: number; limit: number | null; remaining: number | null }) {
+function buildUsageHeaders(usage: {
+  used: number
+  limit: number | null
+  remaining: number | null
+  blocked?: boolean
+  cooldownSecondsRemaining?: number | null
+}) {
   return {
     "x-copilot-usage-used": String(usage.used),
     "x-copilot-usage-limit": usage.limit === null ? "unlimited" : String(usage.limit),
     "x-copilot-usage-remaining": usage.remaining === null ? "unlimited" : String(usage.remaining),
+    "x-copilot-usage-blocked": String(Boolean(usage.blocked)),
+    "x-copilot-cooldown-seconds": usage.cooldownSecondsRemaining === null || usage.cooldownSecondsRemaining === undefined
+      ? "0"
+      : String(usage.cooldownSecondsRemaining),
   }
 }
 
@@ -341,14 +350,14 @@ export async function POST(request: Request) {
     const headerAccountKey = request.headers.get("x-entrestate-account-key")?.trim() || request.headers.get("x-entrestate-user-id")?.trim()
     const entitlement = await getCurrentEntitlement(headerAccountKey)
     const usageAccountKey = entitlement.accountKey || getAnonymousCopilotAccountKey(request)
-    const usage = await incrementCopilotDailyUsage(usageAccountKey, entitlement.tier)
+    const { allowed, usage } = await consumeCopilotUsage(usageAccountKey, entitlement.tier)
 
-    if (entitlement.tier === "free" && usage.used > FREE_COPILOT_DAILY_LIMIT) {
+    if (!allowed) {
       return NextResponse.json(
         {
-          error: "You have finished your daily limit for your current plan.",
+          error: "Free usage is cooling down. Try again once your cooldown ends.",
           upgrade_cta: {
-            label: "Subscribe to continue",
+            label: "Upgrade for uninterrupted access",
             url: "/pricing",
           },
           tier: entitlement.tier,
@@ -356,7 +365,13 @@ export async function POST(request: Request) {
           requestId,
           request_id: requestId,
         },
-        { status: 429 },
+        {
+          status: 429,
+          headers: {
+            "x-request-id": requestId,
+            ...buildUsageHeaders(usage),
+          },
+        },
       )
     }
 

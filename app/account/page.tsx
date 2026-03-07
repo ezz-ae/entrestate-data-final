@@ -19,11 +19,11 @@ import { AccountIdentity } from "@/components/account-identity"
 import { AccountBillingControls } from "@/components/account-billing-controls"
 import { getCurrentEntitlement } from "@/lib/account-entitlement"
 import { listBillingEventsByAccountKey, type BillingActivityEvent } from "@/lib/billing-entitlements"
-import { getCopilotDailyUsage } from "@/lib/copilot-usage"
+import { getCopilotDailyLimit, getCopilotDailyUsage } from "@/lib/copilot-usage"
 
 export const metadata: Metadata = {
   title: "Account - Entrestate",
-  description: "Manage your Entrestate account, subscription, and daily usage.",
+  description: "Manage your Entrestate account, subscription, and AI usage.",
 }
 
 const PLAN_LABELS: Record<"free" | "pro" | "team" | "institutional", string> = {
@@ -42,7 +42,7 @@ const PLAN_COLORS: Record<"free" | "pro" | "team" | "institutional", string> = {
 
 const QUICK_ACCESS = [
   {
-    label: "AI Copilot",
+    label: "AI Chat",
     description: "Decision sessions, deal screener, memos",
     href: "/chat",
     icon: MessageSquareText,
@@ -87,13 +87,28 @@ function getActivityDescription(event: BillingActivityEvent) {
   return null
 }
 
-function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
+function UsageMeter({
+  used,
+  limit,
+  blocked,
+  cooldownSecondsRemaining,
+}: {
+  used: number
+  limit: number | null
+  blocked: boolean
+  cooldownSecondsRemaining: number | null
+}) {
+  const cooldownLabel =
+    cooldownSecondsRemaining && cooldownSecondsRemaining > 0
+      ? `Cooldown active · ${Math.ceil(cooldownSecondsRemaining / 60)} min left`
+      : "Cooldown active"
+
   if (limit === null) {
     return (
       <div className="flex items-center gap-1.5">
         <Zap className="h-3.5 w-3.5 text-emerald-500" />
         <span className="text-sm font-semibold text-foreground">Unlimited</span>
-        <span className="text-xs text-muted-foreground">sessions today</span>
+        <span className="text-xs text-muted-foreground">messages</span>
       </div>
     )
   }
@@ -105,15 +120,17 @@ function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold tabular-nums text-foreground">{remaining}</span>
-          <span className="text-xs text-muted-foreground">of {limit} sessions left today</span>
+          <span className="text-xs text-muted-foreground">of {limit} free messages left</span>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{used}/{limit} used</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
         <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
-      {remaining === 0 ? (
-        <p className="mt-1.5 text-[11px] text-red-400">Daily limit reached. Resets at midnight UTC.</p>
+      {blocked ? (
+        <p className="mt-1.5 text-[11px] text-red-400">{cooldownLabel}</p>
+      ) : remaining === 0 ? (
+        <p className="mt-1.5 text-[11px] text-red-400">Usage window is full. Cooldown starts automatically.</p>
       ) : null}
     </div>
   )
@@ -132,7 +149,13 @@ export default async function AccountPage({
     entitlement.accountKey ? listBillingEventsByAccountKey(entitlement.accountKey, 6) : Promise.resolve([]),
     entitlement.accountKey
       ? getCopilotDailyUsage(entitlement.accountKey, entitlement.tier)
-      : Promise.resolve({ used: 0, limit: 3, remaining: 3 }),
+      : Promise.resolve({
+          used: 0,
+          limit: getCopilotDailyLimit(entitlement.tier),
+          remaining: getCopilotDailyLimit(entitlement.tier),
+          blocked: false,
+          cooldownSecondsRemaining: null,
+        }),
   ])
 
   const planLabel = PLAN_LABELS[entitlement.tier]
@@ -203,8 +226,13 @@ export default async function AccountPage({
 
               {/* AI usage meter */}
               <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
-                <p className="mb-3 text-[10px] uppercase tracking-wider text-muted-foreground">AI Copilot · Today</p>
-                <UsageMeter used={usage.used} limit={usage.limit} />
+                <p className="mb-3 text-[10px] uppercase tracking-wider text-muted-foreground">AI Chat · Free usage window</p>
+                <UsageMeter
+                  used={usage.used}
+                  limit={usage.limit}
+                  blocked={usage.blocked}
+                  cooldownSecondsRemaining={usage.cooldownSecondsRemaining}
+                />
               </div>
 
               {/* Billing controls */}

@@ -41,7 +41,7 @@ const INTENT_META: Record<string, { label: string; description: string }> = {
 }
 
 const NAV_MODULES = [
-  { label: "AI Copilot", description: "Get scored answers instantly", href: "/chat", icon: Sparkles, accent: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10", border: "border-blue-200/60 dark:border-blue-500/20", tag: "Decision engine" },
+  { label: "AI Chat", description: "Get scored answers instantly", href: "/chat", icon: Sparkles, accent: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10", border: "border-blue-200/60 dark:border-blue-500/20", tag: "Decision engine" },
   { label: "Properties", description: "Every project, fully scored", href: "/properties", icon: Building2, accent: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10", border: "border-indigo-200/60 dark:border-indigo-500/20", tag: "Inventory" },
   { label: "Areas", description: "Yield & supply by location", href: "/areas", icon: MapIcon, accent: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-500/10", border: "border-teal-200/60 dark:border-teal-500/20", tag: "Geography" },
   { label: "Developers", description: "Reliability index & track record", href: "/developers", icon: Users2, accent: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-500/10", border: "border-violet-200/60 dark:border-violet-500/20", tag: "Counterparty" },
@@ -161,7 +161,7 @@ export default async function OverviewPage() {
               </span>
               <Link href="/chat" className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10">
                 <Sparkles className="h-3 w-3" />
-                Ask Copilot
+                Open AI chat
               </Link>
             </div>
           </div>
@@ -303,7 +303,7 @@ export default async function OverviewPage() {
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
               <Link href="/properties" className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">Browse all projects <ArrowUpRight className="h-3 w-3" /></Link>
-              <Link href="/chat" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"><Sparkles className="h-3 w-3" />Ask Copilot</Link>
+              <Link href="/chat" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"><Sparkles className="h-3 w-3" />Open AI chat</Link>
             </div>
           </article>
         </div>
@@ -311,7 +311,7 @@ export default async function OverviewPage() {
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Link href="/chat" className="group flex items-center justify-between rounded-2xl border border-primary/25 bg-primary/5 px-5 py-4 transition-all hover:bg-primary/10 hover:-translate-y-0.5">
             <div>
-              <p className="text-sm font-semibold text-foreground">AI Decision Copilot</p>
+              <p className="text-sm font-semibold text-foreground">AI Decision Chat</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Shortlist projects · Compare areas · Stress-test assumptions</p>
             </div>
             <div className="ml-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-md transition group-hover:scale-105">
