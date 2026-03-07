@@ -22,28 +22,89 @@ import Image from "next/image"
 import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 
-// A new, polished message bubble component
 function MessageBubble({ message }: { message: any }) {
-  const isUser = message.role === 'user'
+  const [isExpanded, setIsExpanded] = useState(false)
+  const isUser = message.role === "user"
+  const content = message.content
+  const isLongMessage = content.length > 200
+
+  const handleToggleExpand = () => {
+    setIsExpanded(!isExpanded)
+  }
+
+  const renderContent = () => {
+    if (isLongMessage && !isExpanded) {
+      return (
+        <>
+          <p className="whitespace-pre-wrap">{`${content.substring(0, 200)}...`}</p>
+          <Button
+            variant="link"
+            className="h-auto p-0 text-xs"
+            onClick={handleToggleExpand}
+          >
+            Read more
+          </Button>
+        </>
+      )
+    }
+    return <p className="whitespace-pre-wrap">{content}</p>
+  }
+
   return (
-    <div 
-      key={message.id} 
-      className={`flex items-start gap-2.5 animate-in slide-in-from-bottom-2 fade-in-0 duration-300 ${isUser ? 'justify-end' : ''}`}
+    <div
+      key={message.id}
+      className={`flex items-start gap-2.5 animate-in slide-in-from-bottom-2 fade-in-0 duration-300 ${
+        isUser ? "justify-end" : ""
+      }`}
     >
       {!isUser && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Sparkles className="h-4 w-4" />
         </div>
       )}
-      <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-        isUser 
-          ? 'bg-primary text-primary-foreground rounded-tr-md' 
-          : 'bg-muted/60 text-foreground rounded-tl-md'
-      }`}>
-        <p className="whitespace-pre-wrap">{message.content}</p>
+      <div
+        className={`relative max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+          isUser
+            ? "bg-primary text-primary-foreground rounded-tr-md"
+            : "bg-muted/60 text-foreground rounded-tl-md"
+        }`}
+      >
+        {renderContent()}
+        <div
+          className={`absolute bottom-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[10px] border-b-transparent ${
+            isUser
+              ? "right-[-8px] border-l-primary border-r-transparent"
+              : "left-[-8px] border-l-transparent border-r-muted/60"
+          }`}
+        />
       </div>
+       {isUser && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60 text-foreground">
+          <UserIcon className="h-4 w-4" />
+        </div>
+      )}
     </div>
   )
+}
+
+function UserIcon(props: any) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+        </svg>
+    )
 }
 
 export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }) {
@@ -386,12 +447,13 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                     <div className="bg-primary/10 p-4 rounded-full mb-4 shadow-inner">
                       <Sparkles className="h-8 w-8 text-primary" />
                     </div>
-                    <p className="text-base font-semibold text-foreground">How can I help you today?</p>
+                    <p className="text-base font-semibold text-foreground">Welcome, Guest!</p>
+                    <p className="text-sm text-muted-foreground mt-1">How can I help you today?</p>
                     <div className="mt-4 grid grid-cols-2 gap-2 w-full text-xs text-muted-foreground">
-                      <div className="p-3 rounded-lg bg-muted/50 text-left">Compare areas</div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-left">Screen deals</div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-left">Draft memos</div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-left">Check prices</div>
+                      <button className="p-3 rounded-lg bg-muted/50 text-left hover:bg-muted/70">Continue last session</button>
+                      <button className="p-3 rounded-lg bg-muted/50 text-left hover:bg-muted/70">Start new search</button>
+                      <button className="p-3 rounded-lg bg-muted/50 text-left hover:bg-muted/70">Compare areas</button>
+                      <button className="p-3 rounded-lg bg-muted/50 text-left hover:bg-muted/70">Screen deals</button>
                     </div>
                   </div>
                 ) : (
@@ -414,6 +476,15 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
               </div>
 
               <div className="p-4 border-t border-border bg-card/20">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {messages.length > 0 && messages[messages.length - 1].role !== 'user' && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => sendMessage({ text: 'Tell me more' })}>Tell me more</Button>
+                      <Button variant="outline" size="sm" onClick={() => sendMessage({ text: 'What are the risks?' })}>What are the risks?</Button>
+                      <Button variant="outline" size="sm" onClick={() => sendMessage({ text: 'Summarize' })}>Summarize</Button>
+                    </>
+                  )}
+                </div>
                 <form
                   onSubmit={(event) => {
                     void submitMessage(event)

@@ -17,6 +17,7 @@ const navLinks = [
   { label: "Areas", href: "/areas" },
   { label: "Developers", href: "/developers" },
   { label: "Properties", href: "/properties" },
+  { label: "Research", href: "/reports/library" },
 ]
 
 export function Navbar() {

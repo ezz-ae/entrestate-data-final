@@ -86,6 +86,7 @@ export async function POST(request: Request) {
     },
     select: {
       id: true,
+      publicId: true,
       createdAt: true,
       title: true,
       payload: true,

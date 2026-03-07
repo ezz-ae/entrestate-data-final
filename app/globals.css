@@ -103,7 +103,7 @@
 }
 
 :root[data-reading="on"] .reading-copy {
-  font-size: 1.05rem;
+  font-size: var(--font-size, 1.05rem);
   line-height: 1.85;
 }
 
@@ -384,4 +384,100 @@
 }
 .animate-msg-in {
   animation: msg-in 0.25s ease-out forwards;
+}
+
+/* Reports library reader */
+:root {
+  --reader-bg: oklch(0.99 0.003 90);
+  --reader-text: oklch(0.18 0.01 250);
+  --reader-muted: oklch(0.52 0.01 250);
+  --reader-border: oklch(0.9 0.005 90);
+  --reader-gold: oklch(0.56 0.17 258);
+  --reader-gold-light: oklch(0.95 0.03 255);
+  --reader-navy: oklch(0.22 0.06 255);
+  --reader-focus-bg: oklch(0.97 0.01 90);
+  --reader-highlight: oklch(0.92 0.04 250);
+  --reader-evidence-bg: oklch(0.97 0.02 248);
+  --reader-font-size: 1.125rem;
+  --reader-line-height: 1.85;
+  --reader-column-width: 72ch;
+}
+
+.reader-theme-sepia {
+  --reader-bg: oklch(0.97 0.035 82);
+  --reader-text: oklch(0.22 0.04 58);
+  --reader-muted: oklch(0.48 0.04 58);
+  --reader-border: oklch(0.86 0.04 75);
+  --reader-focus-bg: oklch(0.94 0.04 82);
+  --reader-highlight: oklch(0.88 0.09 78);
+}
+
+.reader-theme-dark {
+  --reader-bg: oklch(0.14 0.01 255);
+  --reader-text: oklch(0.90 0.01 90);
+  --reader-muted: oklch(0.60 0.01 250);
+  --reader-border: oklch(0.25 0.02 255);
+  --reader-focus-bg: oklch(0.18 0.02 255);
+  --reader-highlight: oklch(0.28 0.06 252);
+  --reader-gold: oklch(0.75 0.13 255);
+  --reader-gold-light: oklch(0.22 0.04 255);
+  --reader-evidence-bg: oklch(0.19 0.025 255);
+}
+
+.reader-focus-mode .reader-para {
+  opacity: 0.3;
+  transition: opacity 0.4s ease;
+}
+
+.reader-focus-mode .reader-para.reader-para-active {
+  opacity: 1;
+}
+
+.reader-teleprompter {
+  scroll-behavior: auto;
+}
+
+.evidence-ref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  background-color: var(--reader-gold);
+  color: white;
+  font-size: 0.6em;
+  font-weight: 700;
+  border-radius: 50%;
+  vertical-align: super;
+  margin-left: 1px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  text-decoration: none;
+}
+
+.evidence-ref:hover {
+  background-color: var(--reader-navy);
+}
+
+@media print {
+  .reader-no-print {
+    display: none !important;
+  }
+
+  .reader-print-body {
+    font-size: 11pt;
+    line-height: 1.7;
+    color: #111;
+    background: white;
+  }
+
+  .reader-print-header {
+    border-bottom: 2pt solid #c9a85c;
+    padding-bottom: 12pt;
+    margin-bottom: 24pt;
+  }
+
+  .reader-evidence-panel {
+    page-break-before: always;
+  }
 }

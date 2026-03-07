@@ -143,6 +143,12 @@ KOBOLDAI_MODEL=
 The `/os` notebook UI simulates a free tier 30-row cap; switch the plan selector to test larger limits.
 
 ## Documentation
+- `docs/decision-infrastructure/README.md` — canonical docs map for the full Decision Infrastructure
+- `docs/decision-infrastructure/decision-tunnel.md` — Stage 1–4 workflow deep-dive
+- `docs/decision-infrastructure/evidence-stack-hierarchy.md` — L1–L5 evidence model and trust boundaries
+- `docs/decision-infrastructure/market-scoring-signals.md` — scoring signal definitions and governance
+- `docs/decision-infrastructure/broker-dashboard-features.md` — broker-facing intelligence features
+- `docs/decision-infrastructure/core-data-objects.md` — core data contracts (Time Table, TableSpec, Decision Objects, Profile Intelligence)
 - `docs/platform-summary.md` — high-level platform overview
 - `docs/build-final.md` — complete blueprint and build plan
 - `docs/blueprint-summary.md` — consolidated blueprint and architecture

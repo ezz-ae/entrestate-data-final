@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
+import { AreasView } from "@/components/decision/areas-view";
 import { AreaCard } from "@/components/decision/area-card"
 import { listAreas } from "@/lib/decision-infrastructure"
 
@@ -50,26 +51,10 @@ export default async function AreasPage() {
           })()}
         </div>
 
-        <section className="relative grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6 xl:grid-cols-3">
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(900px_circle_at_50%_-10%,rgba(20,184,166,0.22),transparent_58%)]" />
-          {data.areas.map((area, index) => (
-            <AreaCard
-              key={`${String(area.slug)}-${index}`}
-              slug={String(area.slug)}
-              area={String(area.area ?? "Area")}
-              projects={typeof area.projects === "number" ? area.projects : null}
-              city={typeof area.city === "string" ? area.city : null}
-              avg_price={typeof area.avg_price === "number" ? area.avg_price : null}
-              avg_yield={typeof area.avg_yield === "number" ? area.avg_yield : null}
-              image_url={typeof area.image_url === "string" ? area.image_url : null}
-              top_projects={
-                Array.isArray(area.top_projects)
-                  ? area.top_projects.filter((item): item is string => typeof item === "string")
-                  : null
-              }
-            />
-          ))}
-        </section>
+import { AreasView } from "@/components/decision/areas-view"
+...
+        <AreasView areas={data.areas} />
+...
       </div>
       <Footer />
     </main>

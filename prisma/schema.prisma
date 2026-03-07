@@ -104,6 +104,7 @@ model User {
 
 model AssistantReport {
   id        String   @id @default(cuid())
+  publicId  String   @unique @default(cuid())
   userId    String   @map("user_id")
   teamId    String?  @map("team_id")
   title     String

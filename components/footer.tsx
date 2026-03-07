@@ -5,35 +5,50 @@ import { ThemeSwitcher } from "@/components/theme-switcher"
 import { ArrowRight } from "lucide-react"
 
 const footerLinks = {
-  Explore: [
-    { label: "Chat", href: "/chat" },
-    { label: "Properties", href: "/properties" },
-    { label: "Areas", href: "/areas" },
-    { label: "Developers", href: "/developers" },
-  ],
-  Investor: [
-    { label: "Market Dashboard", href: "/top-data" },
-    { label: "Golden Visa", href: "/golden-visa" },
-    { label: "Market Score", href: "/market-score" },
-    { label: "Pricing", href: "/pricing" },
+  Platform: [
+    { label: "Documentation", href: "/docs" },
+    { label: "Reports Library", href: "/reports/library" },
+    { label: "Partners & APIs", href: "/docs/partners-apis" },
+    { label: "Industry", href: "/docs/industry" },
+    { label: "Careers & Intern", href: "/docs/careers-intern" },
+    { label: "AI", href: "/ai" },
   ],
   Insights: [
     { label: "Markets", href: "/markets" },
     { label: "Search", href: "/search" },
-    { label: "Reports", href: "/reports" },
-    { label: "Library", href: "/library" },
+    { label: "Top Data", href: "/top-data" },
+    { label: "Market Score", href: "/market-score" },
   ],
   Company: [
     { label: "About", href: "/about" },
+    { label: "Investor Relations", href: "/docs/investors-relations" },
     { label: "Changelog", href: "/changelog" },
     { label: "Roadmap", href: "/roadmap" },
     { label: "Support", href: "/support" },
   ],
+  "Status & Contact": [
+    { label: "Status", href: "/status" },
+    { label: "Contact", href: "/contact" },
+    { label: "Pricing", href: "/pricing" },
+  ],
+  "Data & Information": [
+    { label: "Dubai Land Department", href: "/docs/data-information" },
+    { label: "Stakeholders", href: "/docs/data-information" },
+    { label: "Investor Relations Data", href: "/docs/investors-relations" },
+    { label: "Source of Truth Registry", href: "/docs/source-of-truth-registry" },
+    { label: "Investor KPI Audit", href: "/docs/investor-metrics-audit" },
+    { label: "Mind Map Articles", href: "/docs/articles" },
+  ],
+  Explore: [
+    { label: "Chat", href: "/chat" },
+    { label: "Generated Reports", href: "/reports/generated" },
+    { label: "Properties", href: "/properties" },
+    { label: "Areas", href: "/areas" },
+    { label: "Developers", href: "/developers" },
+  ],
   Legal: [
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Status", href: "/status" },
-    { label: "Contact", href: "/contact" },
   ],
 }
 
@@ -70,8 +85,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-8 pb-12">
-          <div className="col-span-2 md:col-span-2">
+        <div className="grid grid-cols-2 md:grid-cols-8 gap-8 pb-12">
+          <div className="col-span-2 md:col-span-3">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <div className="flex gap-0.5" aria-hidden="true">
                 <div className="w-2.5 h-2.5 rounded-sm bg-foreground" />
@@ -84,10 +99,14 @@ export function Footer() {
               Market coverage, project evidence, and investor-first workflows built for operators who need precision,
               not noise.
             </p>
+            <p className="mt-4 text-xs text-muted-foreground max-w-sm">
+              The platform documentation is organized in a mind-map article system for partners, stakeholders, and
+              investor conversations.
+            </p>
           </div>
 
           {Object.entries(footerLinks).map(([category, links]) => (
-            <div key={category}>
+            <div key={category} className="col-span-1">
               <h4 className="text-xs font-medium text-foreground uppercase tracking-wider mb-4">{category}</h4>
               <ul className="space-y-2.5">
                 {links.map((link) => (

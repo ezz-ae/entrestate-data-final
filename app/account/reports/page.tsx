@@ -15,9 +15,8 @@ export default async function ReportsPage() {
   const user = await getSyncedUser()
   if (!user) redirect("/login")
 
-  const reports = await prisma.decisionObject.findMany({
-    where: { ownerId: user.id },
-    include: { timetable: true },
+  const reports = await prisma.assistantReport.findMany({
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
   })
 
@@ -72,30 +71,19 @@ export default async function ReportsPage() {
                 </div>
 
                 <h3 className="text-base font-semibold text-foreground line-clamp-1 mb-2">
-                  {report.type.replace(/_/g, " ")}
+                  {report.title}
                 </h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-6 h-8">
-                  Generated from session intent: {report.timetable.intent}
-                </p>
 
                 <div className="mt-auto flex items-center justify-between border-t border-border pt-4">
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                      report.status === "ready" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                    }`}>
-                      {report.status}
-                    </span>
-                    <span className="text-[10px] font-medium text-muted-foreground">
-                      v{report.version}
-                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-foreground hover:bg-secondary/80">
                       <Download className="h-3.5 w-3.5" />
                     </button>
-                    <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white shadow-sm hover:bg-accent/90">
+                    <Link href={`/reports/${report.publicId}`} className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white shadow-sm hover:bg-accent/90">
                       <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </div>
