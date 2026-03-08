@@ -574,7 +574,7 @@ export function ChatInterface({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0)
   const [canvasOpen, setCanvasOpen] = useState(false)
 
-  const { messages, sendMessage, clearError, status, error, stop } = useCopilot()
+  const { messages, sendMessage, status, error, stop } = useCopilot()
 
   useEffect(() => {
     if (!mounted) return;
@@ -860,9 +860,9 @@ export function ChatInterface({
     setSlashActiveIndex(0)
   }, [slashQuery])
 
-  const sendPrompt = async (prompt: string) => {
+  const sendPrompt = async (prompt: string): Promise<boolean> => {
     const cleanedPrompt = prompt.trim()
-    if (!cleanedPrompt) return
+    if (!cleanedPrompt) return false
 
     if (isBusy) {
       stop()
@@ -877,17 +877,11 @@ export function ChatInterface({
       } else {
         setLimitMessage("Free usage is cooling down. Please try again soon.")
       }
-      return
+      return false
     }
 
     setLimitMessage(null)
-    clearError()
-    try {
-      await sendMessage({ text: cleanedPrompt })
-    } catch (err) {
-      console.error("Chat send error:", err)
-      return
-    }
+    await sendMessage({ text: cleanedPrompt })
 
     if (limit !== null) {
       setRemaining((prev) => {
@@ -899,6 +893,8 @@ export function ChatInterface({
         return nextRemaining
       })
     }
+
+    return true
   }
 
   const activateSlashCommand = async (command: SlashCommand) => {
@@ -916,8 +912,10 @@ export function ChatInterface({
         const command = filteredSlashCommands[slashActiveIndex] ?? filteredSlashCommands[0]
         if (command) await activateSlashCommand(command)
       } else {
-        await sendPrompt(value)
-        setInput("")
+        const submitted = await sendPrompt(value)
+        if (submitted) {
+          setInput("")
+        }
       }
       return
     }
@@ -962,8 +960,10 @@ export function ChatInterface({
       return
     }
 
-    await sendPrompt(value)
-    setInput("")
+    const submitted = await sendPrompt(value)
+    if (submitted) {
+      setInput("")
+    }
   }
 
   const runSimulationInChat = async () => {

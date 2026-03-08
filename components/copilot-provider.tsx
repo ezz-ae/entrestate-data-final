@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, ReactNode, useState, useCallback } from "react"
+import { createContext, useContext, ReactNode, useState, useCallback, useMemo } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 
@@ -18,13 +18,21 @@ const CopilotContext = createContext<CopilotContextValue | null>(null)
 export function CopilotProvider({ children, initialId }: { children: ReactNode; initialId?: string }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  // Initialize the global chat instance
+  // Memoize transport so it's not recreated on every render.
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/copilot",
+        body: initialId != null ? { id: initialId } : {},
+      }),
+    [initialId],
+  )
+
+  // Only include `id` when it's defined — passing `id: undefined` triggers
+  // shouldRecreateChat in @ai-sdk/react on every render, resetting the chat.
   const chatHelpers = useChat({
-    id: initialId,
-    transport: new DefaultChatTransport({
-      api: "/api/copilot",
-      body: { id: initialId },
-    }),
+    ...(initialId != null ? { id: initialId } : {}),
+    transport,
     onError: (error) => {
       console.error("Copilot error:", error)
     },
