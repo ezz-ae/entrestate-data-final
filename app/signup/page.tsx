@@ -19,6 +19,23 @@ export default function SignUpPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string) => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error(timeoutMessage))
+      }, timeoutMs)
+    })
+
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle)
+      }
+    }
+  }
+
   useEffect(() => {
     if (session?.user) {
       router.replace("/workspace")
@@ -31,20 +48,29 @@ export default function SignUpPage() {
     setSuccessMessage(null)
     setIsLoading(true)
 
-    const { data, error } = await authClient.signUp.email({ email, password, name })
-    setIsLoading(false)
+    try {
+      const { data, error } = await withTimeout(
+        authClient.signUp.email({ email, password, name }),
+        15000,
+        "Registration timed out. Check Neon Auth settings and try again.",
+      )
 
-    if (error) {
-      setFormError(error.message || "Unable to create account. Please try again.")
-      return
+      if (error) {
+        setFormError(error.message || "Unable to create account. Please try again.")
+        return
+      }
+
+      if (data?.token) {
+        router.push("/workspace")
+        return
+      }
+
+      setSuccessMessage("Check your email to verify your account, then sign in.")
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unable to create account. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    if (data?.token) {
-      router.push("/workspace")
-      return
-    }
-
-    setSuccessMessage("Check your email to verify your account, then sign in.")
   }
 
   return (
@@ -164,10 +190,11 @@ export default function SignUpPage() {
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 mt-2"
-                disabled={isLoading || isPending}
+                disabled={isLoading}
               >
                 {isLoading ? "Creating account..." : "Create account"}
               </Button>
+              {isPending && !isLoading ? <p className="text-xs text-muted-foreground">Checking session status…</p> : null}
               {formError && <p className="text-sm text-rose-300">{formError}</p>}
               {successMessage && <p className="text-sm text-emerald-300">{successMessage}</p>}
             </form>

@@ -17,6 +17,23 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string) => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error(timeoutMessage))
+      }, timeoutMs)
+    })
+
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle)
+      }
+    }
+  }
+
   useEffect(() => {
     if (session?.user) {
       router.replace("/workspace")
@@ -28,15 +45,24 @@ export default function LoginPage() {
     setFormError(null)
     setIsLoading(true)
 
-    const { error } = await authClient.signIn.email({ email, password })
-    setIsLoading(false)
+    try {
+      const { error } = await withTimeout(
+        authClient.signIn.email({ email, password }),
+        15000,
+        "Login timed out. Check Neon Auth settings and try again.",
+      )
 
-    if (error) {
-      setFormError(error.message || "Unable to sign in. Please try again.")
-      return
+      if (error) {
+        setFormError(error.message || "Unable to sign in. Please try again.")
+        return
+      }
+
+      router.push("/workspace")
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Unable to sign in. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    router.push("/workspace")
   }
 
   return (
@@ -146,10 +172,11 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 mt-2"
-                disabled={isLoading || isPending}
+                disabled={isLoading}
               >
                 {isLoading ? "Signing in..." : "Sign in"}
               </Button>
+              {isPending && !isLoading ? <p className="text-xs text-muted-foreground">Checking session status…</p> : null}
               {formError && <p className="text-sm text-rose-300">{formError}</p>}
             </form>
           </div>

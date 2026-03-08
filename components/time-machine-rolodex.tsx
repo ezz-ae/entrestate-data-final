@@ -799,6 +799,7 @@ export function TimeMachineRolodex() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [selectedReport, setSelectedReport] = useState<ReportCard | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const touchStartX = useRef<number | null>(null)
 
   const handleScroll = (e: WheelEvent) => {
     if (viewMode !== "stack") return
@@ -825,6 +826,21 @@ export function TimeMachineRolodex() {
     setMousePos({ x: e.clientX, y: e.clientY })
   }
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (viewMode !== "stack") return
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (viewMode !== "stack" || touchStartX.current === null) return
+    const deltaX = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(deltaX) > 50) {
+      const direction = deltaX > 0 ? 1 : -1
+      setPosition((prev) => Math.max(0, Math.min(cards.length - 1, Math.round(prev) + direction)))
+    }
+    touchStartX.current = null
+  }
+
   return (
     <>
       {/* Report Reader — full-screen overlay */}
@@ -842,6 +858,8 @@ export function TimeMachineRolodex() {
         ref={containerRef}
         className="relative min-h-screen w-full overflow-hidden bg-background"
         onMouseMove={handleMouseMove}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Header nav */}
         <div className="absolute right-6 top-6 z-50 flex items-center gap-1 rounded-lg border border-border/70 bg-card/80 p-1 shadow-sm backdrop-blur-sm">
@@ -879,7 +897,7 @@ export function TimeMachineRolodex() {
         {viewMode === "stack" ? (
           <>
             <div className="absolute inset-0 flex items-center justify-center" style={{ perspective: "1500px" }}>
-              <div className="relative h-[600px] w-[800px]" style={{ transformStyle: "preserve-3d" }}>
+              <div className="relative h-[calc(100vh-160px)] w-[calc(100vw-32px)] md:h-[600px] md:w-[800px]" style={{ transformStyle: "preserve-3d" }}>
                 {[...cards].reverse().map((card, reverseIndex) => {
                   const index = cards.length - 1 - reverseIndex
                   const distanceFromActive = index - position
@@ -1008,8 +1026,8 @@ export function TimeMachineRolodex() {
               </div>
             </div>
 
-            {/* Timeline */}
-            <div className="absolute bottom-20 right-8 top-20 z-40 flex flex-col items-end justify-between py-8">
+            {/* Timeline — desktop only */}
+            <div className="absolute bottom-20 right-8 top-20 z-40 hidden md:flex flex-col items-end justify-between py-8">
               {cards.map((card, index) => {
                 const isActive = index === activeIndex
                 return (
@@ -1026,7 +1044,26 @@ export function TimeMachineRolodex() {
               })}
             </div>
 
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm text-muted-foreground">
+            {/* Mobile prev/next navigation */}
+            <div className="absolute bottom-6 left-1/2 z-40 -translate-x-1/2 flex md:hidden items-center gap-5">
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/80 text-muted-foreground transition hover:text-foreground disabled:opacity-30"
+                onClick={() => setPosition((p) => Math.max(0, Math.round(p) - 1))}
+                disabled={activeIndex === 0}
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+              </button>
+              <span className="text-xs tabular-nums text-muted-foreground">{activeIndex + 1} / {cards.length}</span>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/80 text-muted-foreground transition hover:text-foreground disabled:opacity-30"
+                onClick={() => setPosition((p) => Math.min(cards.length - 1, Math.round(p) + 1))}
+                disabled={activeIndex === cards.length - 1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm text-muted-foreground hidden md:block">
               Scroll or click timeline to navigate
             </div>
           </>
@@ -1042,7 +1079,7 @@ export function TimeMachineRolodex() {
                     onMouseLeave={() => setHoveredIndex(null)}
                     onClick={() => openReport(card)}
                   >
-                    <span className="w-32 shrink-0 text-sm text-muted-foreground">
+                    <span className="w-20 md:w-32 shrink-0 text-xs md:text-sm text-muted-foreground">
                       {card.date.split(",")[0]}, {card.date.split(",")[1]?.trim().split(" ")[0]}
                     </span>
                     {card.category && (
@@ -1050,10 +1087,10 @@ export function TimeMachineRolodex() {
                         {card.category}
                       </span>
                     )}
-                    <span className="min-w-0 shrink-0 font-medium text-foreground" style={{ width: "240px" }}>
+                    <span className="min-w-0 flex-1 font-medium text-foreground md:flex-none md:w-60 md:shrink-0">
                       {card.title}
                     </span>
-                    <span className="min-w-0 flex-1 text-muted-foreground">{card.subtitle}</span>
+                    <span className="hidden md:block min-w-0 flex-1 text-muted-foreground">{card.subtitle}</span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-1 group-hover:text-foreground" />
                   </button>
                 ))}

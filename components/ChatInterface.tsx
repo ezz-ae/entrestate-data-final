@@ -574,7 +574,7 @@ export function ChatInterface({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0)
   const [canvasOpen, setCanvasOpen] = useState(false)
 
-  const { messages, sendMessage, status, error } = useCopilot()
+  const { messages, sendMessage, status, error, stop } = useCopilot()
 
   useEffect(() => {
     if (!mounted) return;
@@ -672,7 +672,7 @@ export function ChatInterface({
     usageError.toLowerCase().includes("cool") ||
     usageError.toLowerCase().includes("limit")
   const isBusy = status === "submitted" || status === "streaming"
-  const submitBlocked = isBusy || input.trim().length === 0 || chatBlocked
+  const submitBlocked = input.trim().length === 0 || chatBlocked
   const usageStatusLabel = useMemo(() => {
     if (limit === null) return "Unlimited · ⌘↵ to send"
     if (chatBlocked) {
@@ -862,7 +862,13 @@ export function ChatInterface({
 
   const sendPrompt = async (prompt: string) => {
     const cleanedPrompt = prompt.trim()
-    if (!cleanedPrompt || isBusy) return
+    if (!cleanedPrompt) return
+
+    if (isBusy) {
+      stop()
+      await new Promise((resolve) => window.setTimeout(resolve, 80))
+    }
+
     if (chatBlocked) {
       if (cooldownSecondsRemaining && cooldownSecondsRemaining > 0) {
         setLimitMessage(
@@ -1130,7 +1136,7 @@ export function ChatInterface({
               <button
                 key={card.label}
                 type="button"
-                disabled={isBusy || chatBlocked}
+                disabled={chatBlocked}
                 onClick={() => void sendPrompt(card.prompt)}
                 className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/70 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -1273,7 +1279,6 @@ export function ChatInterface({
                 key={command.label}
                 type="button"
                 onClick={() => void sendPrompt(command.prompt)}
-                disabled={isBusy}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Icon className="h-3 w-3" />
@@ -1287,7 +1292,6 @@ export function ChatInterface({
               key={suggestion}
               type="button"
               onClick={() => void sendPrompt(suggestion)}
-              disabled={isBusy}
               className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-card/60 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/35 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               <WandSparkles className="h-3 w-3" />

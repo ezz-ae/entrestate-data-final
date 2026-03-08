@@ -234,7 +234,7 @@ function UserIcon(props: any) {
 }
 
 export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }) {
-  const { messages, sendMessage, status, error, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
+  const { messages, sendMessage, status, error, stop, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
   const [input, setInput] = useState("")
   const [isDesktopViewport, setIsDesktopViewport] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -336,8 +336,13 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
 
   const sendPrompt = async (prompt: string) => {
     const trimmedPrompt = prompt.trim()
-    if (!trimmedPrompt || isBusy) {
+    if (!trimmedPrompt) {
       return false
+    }
+
+    if (isBusy) {
+      stop()
+      await new Promise((resolve) => window.setTimeout(resolve, 80))
     }
 
     setLocalError(null)
@@ -608,7 +613,6 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                         <button
                           key={label}
                           onClick={() => { void sendPrompt(prompt) }}
-                          disabled={isBusy}
                           className="p-3 rounded-xl bg-muted/40 border border-border/50 text-left text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground hover:border-border transition-all duration-150"
                         >
                           <span className="block font-medium text-foreground/80 mb-0.5">{label}</span>
@@ -643,8 +647,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                       <button
                         key={prompt}
                         onClick={() => { void sendPrompt(prompt) }}
-                        disabled={isBusy}
-                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-50"
+                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
                       >
                         {prompt}
                       </button>
@@ -672,7 +675,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                   <Button
                     type="submit"
                     size="icon"
-                    disabled={isBusy || !input.trim()}
+                    disabled={!input.trim()}
                     className="absolute bottom-3 right-3 h-10 w-10 rounded-lg transition-transform hover:scale-105 active:scale-95"
                   >
                     <Send className="h-4 w-4" />
