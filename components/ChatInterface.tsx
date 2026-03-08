@@ -28,6 +28,7 @@ import {
   getComprehensiveProfileFromSignals,
 } from "@/lib/profile/comprehensive"
 import { generateMediaRichReport } from "@/lib/artifacts/media-report"
+import { TransactionNotification } from "@/components/dld/transaction-notification"
 import type {
   ComprehensiveProfile,
   ComprehensiveProfileMemoryEntry,
@@ -59,6 +60,16 @@ type ComparisonRow = {
   price: number | null
   yield: number | null
   score: number | null
+}
+
+type DldNotificationRow = {
+  headline: string
+  subline: string
+  amount: number
+  badge: string | null
+  reg_type: string
+  prop_type: string
+  is_notable: boolean
 }
 
 type ReportDraftResult = {
@@ -169,6 +180,16 @@ function toFiniteNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value
+  if (typeof value === "number") return value !== 0
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    return normalized === "true" || normalized === "1" || normalized === "yes"
+  }
+  return false
 }
 
 function toText(value: unknown, fallback = "-") {
@@ -431,6 +452,42 @@ function deriveComparisonRows(toolOutputs: Record<string, unknown>[]): Compariso
   return [...unique.values()]
 }
 
+function deriveDldNotifications(toolOutputs: Record<string, unknown>[]): DldNotificationRow[] {
+  const notifications: DldNotificationRow[] = []
+
+  for (let index = toolOutputs.length - 1; index >= 0; index -= 1) {
+    const output = toolOutputs[index]
+    const source = typeof output.source === "string" ? output.source : ""
+    const rows = toRows(output.rows)
+    if (rows.length === 0) continue
+
+    const isDldFeedSource = source.includes("dld_transaction_feed")
+
+    for (const row of rows) {
+      const headline = typeof row.headline === "string" ? row.headline.trim() : ""
+      const amount = toFiniteNumber(row.amount)
+      if (!headline || amount === null) continue
+      if (!isDldFeedSource && !("subline" in row || "badge" in row || "is_notable" in row)) continue
+
+      notifications.push({
+        headline,
+        subline: typeof row.subline === "string" ? row.subline : "",
+        amount,
+        badge: typeof row.badge === "string" ? row.badge : null,
+        reg_type: typeof row.reg_type === "string" ? row.reg_type : "Ready",
+        prop_type: typeof row.prop_type === "string" ? row.prop_type : "Unit",
+        is_notable: toBoolean(row.is_notable),
+      })
+
+      if (notifications.length >= 8) {
+        return notifications
+      }
+    }
+  }
+
+  return notifications
+}
+
 function resolveDataFreshness(toolOutputs: Record<string, unknown>[]) {
   for (let index = toolOutputs.length - 1; index >= 0; index -= 1) {
     const value = toolOutputs[index]?.data_as_of
@@ -687,6 +744,7 @@ export function ChatInterface({
   const toolOutputs = useMemo(() => extractToolOutputs(messages as any[]), [messages])
   const workspaceCards = useMemo(() => deriveWorkspaceCards(toolOutputs), [toolOutputs])
   const comparisonRows = useMemo(() => deriveComparisonRows(toolOutputs), [toolOutputs])
+  const dldNotifications = useMemo(() => deriveDldNotifications(toolOutputs), [toolOutputs])
   const dataFreshness = useMemo(() => resolveDataFreshness(toolOutputs), [toolOutputs])
 
   const latestAssistantMessage = useMemo(() => {
@@ -1479,6 +1537,23 @@ export function ChatInterface({
                   <path d={yieldSparkPath} stroke="rgb(34,197,94)" strokeWidth="2" fill="none" />
                 </svg>
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative z-10 mt-4 rounded-xl border border-border/60 bg-background/80 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <p className="text-xs font-semibold text-foreground">DLD Notification Feed</p>
+          </div>
+
+          {dldNotifications.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Ask for notable DLD deals to populate live transaction notifications.</p>
+          ) : (
+            <div className="space-y-2">
+              {dldNotifications.map((txn, index) => (
+                <TransactionNotification key={`chat-dld-${index}-${txn.headline}`} txn={txn} />
+              ))}
             </div>
           )}
         </div>

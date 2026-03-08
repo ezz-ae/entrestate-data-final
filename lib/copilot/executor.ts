@@ -13,6 +13,9 @@ import {
   MonitorMarketSegmentsInput,
   DealScreenerInput,
   DeveloperDueDiligenceInput,
+  DldAreaBenchmarkInput,
+  DldNotableDealsInput,
+  DldTransactionSearchInput,
   GenerateInvestorMemoInput,
   MemoSection,
   PriceRealityCheckInput,
@@ -828,6 +831,248 @@ export async function executeMonitorMarketSegments(input: MonitorMarketSegmentsI
   }
 }
 
+export async function executeDldTransactionSearch(input: DldTransactionSearchInput) {
+  const conditions: string[] = []
+  const params: unknown[] = []
+  let paramIndex = 1
+
+  if (input.area) {
+    conditions.push(`LOWER(area) LIKE LOWER($${paramIndex})`)
+    params.push(`%${input.area}%`)
+    paramIndex += 1
+  }
+
+  if (input.project) {
+    conditions.push(`LOWER(project) LIKE LOWER($${paramIndex})`)
+    params.push(`%${input.project}%`)
+    paramIndex += 1
+  }
+
+  if (input.min_amount) {
+    conditions.push(`amount >= $${paramIndex}`)
+    params.push(input.min_amount)
+    paramIndex += 1
+  }
+
+  if (input.max_amount) {
+    conditions.push(`amount <= $${paramIndex}`)
+    params.push(input.max_amount)
+    paramIndex += 1
+  }
+
+  if (input.reg_type) {
+    conditions.push(`reg_type = $${paramIndex}`)
+    params.push(input.reg_type)
+    paramIndex += 1
+  }
+
+  if (input.prop_type) {
+    conditions.push(`prop_type = $${paramIndex}`)
+    params.push(input.prop_type)
+    paramIndex += 1
+  }
+
+  if (input.date_from) {
+    conditions.push(`transaction_date >= $${paramIndex}::date`)
+    params.push(input.date_from)
+    paramIndex += 1
+  }
+
+  if (input.date_to) {
+    conditions.push(`transaction_date <= $${paramIndex}::date`)
+    params.push(input.date_to)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+  const limit = Math.min(input.limit || 20, 50)
+
+  const rowsSql = `
+    SELECT transaction_id, area, project, amount, reg_type, prop_type,
+           rooms, size_sqm, price_per_sqm, transaction_date,
+           sub_type, freehold, usage
+    FROM dld_transactions_arvo
+    ${whereClause}
+    ORDER BY transaction_date DESC, amount DESC
+    LIMIT ${limit}
+  `
+
+  const rows = (await withStatementTimeout(
+    (tx) => tx.$queryRawUnsafe<DbRow[]>(rowsSql, ...params),
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  const statsSql = `
+    SELECT COUNT(*) as total_txns,
+           SUM(amount) as total_volume,
+           AVG(amount)::bigint as avg_price,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY amount)::bigint as median_price
+    FROM dld_transactions_arvo
+    ${whereClause}
+  `
+
+  const statsRows = (await withStatementTimeout(
+    (tx) => tx.$queryRawUnsafe<DbRow[]>(statsSql, ...params),
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  return {
+    source: "dld_transactions_arvo",
+    data_as_of: nowIso(),
+    count: rows.length,
+    stats: statsRows[0] || {},
+    rows,
+  }
+}
+
+export async function executeDldAreaBenchmark(input: DldAreaBenchmarkInput) {
+  const rows = (await withStatementTimeout(
+    (tx) =>
+      tx.$queryRaw<DbRow[]>`
+        SELECT * FROM dld_area_benchmarks_live
+        WHERE LOWER(area) LIKE LOWER(${`%${input.area_name}%`})
+        ORDER BY total_transactions DESC
+        LIMIT 5
+      `,
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  if (rows.length === 0) {
+    return {
+      source: "dld_area_benchmarks_live",
+      data_as_of: nowIso(),
+      no_results: true,
+      rows: [],
+    }
+  }
+
+  return {
+    source: "dld_area_benchmarks_live",
+    data_as_of: nowIso(),
+    count: rows.length,
+    rows,
+  }
+}
+
+export async function executeDldMarketPulse() {
+  const overviewRows = (await withStatementTimeout(
+    (tx) =>
+      tx.$queryRaw<DbRow[]>`
+        SELECT
+          COUNT(*) as total_transactions,
+          SUM(amount) as total_volume,
+          AVG(amount)::bigint as avg_price,
+          COUNT(DISTINCT area) as unique_areas,
+          COUNT(DISTINCT project) as unique_projects,
+          MIN(transaction_date) as date_from,
+          MAX(transaction_date) as date_to,
+          COUNT(*) FILTER (WHERE reg_type = 'Off-Plan') as offplan_count,
+          COUNT(*) FILTER (WHERE reg_type = 'Ready') as ready_count,
+          COUNT(*) FILTER (WHERE amount >= 10000000) as mega_deals,
+          COUNT(*) FILTER (WHERE amount >= 2000000 AND freehold = 'Free Hold') as golden_visa_eligible,
+          AVG(amount) FILTER (WHERE reg_type = 'Off-Plan')::bigint as avg_offplan,
+          AVG(amount) FILTER (WHERE reg_type = 'Ready')::bigint as avg_ready
+        FROM dld_transactions_arvo
+      `,
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  const topAreasByVolume = (await withStatementTimeout(
+    (tx) =>
+      tx.$queryRaw<DbRow[]>`
+        SELECT area,
+               COUNT(*) as txn_count,
+               SUM(amount) as volume,
+               AVG(amount)::bigint as avg_price
+        FROM dld_transactions_arvo
+        GROUP BY area
+        ORDER BY volume DESC
+        LIMIT 10
+      `,
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  const topAreasByVelocity = (await withStatementTimeout(
+    (tx) =>
+      tx.$queryRaw<DbRow[]>`
+        SELECT area, daily_velocity, total_transactions, median_price
+        FROM dld_area_benchmarks_live
+        ORDER BY daily_velocity DESC
+        LIMIT 10
+      `,
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  return {
+    source: "dld_transactions_arvo + dld_area_benchmarks_live",
+    data_as_of: nowIso(),
+    overview: overviewRows[0] || null,
+    top_areas_by_volume: topAreasByVolume,
+    top_areas_by_velocity: topAreasByVelocity,
+  }
+}
+
+export async function executeDldNotableDeals(input: DldNotableDealsInput) {
+  const limit = Math.min(input.limit || 20, 50)
+  const daysBack = Math.min(Math.max(input.days || 7, 1), 90)
+
+  let badgeFilter = ""
+  const params: unknown[] = []
+  if (input.badge) {
+    badgeFilter = "AND badge = $1"
+    params.push(input.badge)
+  }
+
+  const sql = `
+    SELECT headline, subline, amount, area, project, reg_type,
+           prop_type, badge, is_notable, transaction_date, icon,
+           metadata->>'freehold' as freehold,
+           metadata->>'nearestLandmark' as landmark
+    FROM dld_transaction_feed
+    WHERE transaction_date >= CURRENT_DATE - INTERVAL '${daysBack} days'
+    ${badgeFilter}
+    ORDER BY
+      CASE WHEN is_notable THEN 0 ELSE 1 END,
+      amount DESC
+    LIMIT ${limit}
+  `
+
+  const rows = (await withStatementTimeout(
+    (tx) => tx.$queryRawUnsafe<DbRow[]>(sql, ...params),
+    STATEMENT_TIMEOUT_MS,
+  )) as DbRow[]
+
+  return {
+    source: "dld_transaction_feed",
+    data_as_of: nowIso(),
+    count: rows.length,
+    rows,
+  }
+}
+
+export async function executeRefreshDldData() {
+  try {
+    const response = await fetch("https://transactions.arvo.co/api/transactions", {
+      headers: { "User-Agent": "Entrestate-Copilot/1.0" },
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (!response.ok) {
+      return { source: "arvo.co", status: "error", message: `API returned ${response.status}` }
+    }
+
+    const transactions = await response.json()
+    return {
+      source: "arvo.co",
+      data_as_of: nowIso(),
+      status: "success",
+      transactions_available: Array.isArray(transactions) ? transactions.length : 0,
+      message: "DLD data refreshed. Run sync to update database.",
+    }
+  } catch (error) {
+    return { source: "arvo.co", status: "error", message: String(error) }
+  }
+}
+
 export const copilotExecutors = {
   deal_screener: executeDealScreener,
   price_reality_check: executePriceRealityCheck,
@@ -841,6 +1086,11 @@ export const copilotExecutors = {
   generate_strategic_report: executeGenerateStrategicReport,
   generate_investment_roadmap: executeGenerateInvestmentRoadmap,
   monitor_market_segments: executeMonitorMarketSegments,
+  dld_transaction_search: executeDldTransactionSearch,
+  dld_area_benchmark: executeDldAreaBenchmark,
+  dld_market_pulse: executeDldMarketPulse,
+  dld_notable_deals: executeDldNotableDeals,
+  refresh_dld_data: executeRefreshDldData,
 } as const
 
 export { buildDealScreenerQuery }

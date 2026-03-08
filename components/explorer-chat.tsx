@@ -20,6 +20,7 @@ import {
   useExplorerChatStore,
   type ExplorerChatMessage,
 } from "@/lib/explorer-chat-store"
+import { TransactionNotification } from "@/components/dld/transaction-notification"
 
 const explorerSuggestions = [
   "Best yield under AED 2M in Dubai",
@@ -224,6 +225,14 @@ export function ExplorerChat() {
                             </div>
                           )}
                         </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.notifications && msg.notifications.length > 0 && (
+                    <div className="space-y-2">
+                      {msg.notifications.map((txn, index) => (
+                        <TransactionNotification key={`${msg.id}-txn-${index}-${txn.headline}`} txn={txn} />
                       ))}
                     </div>
                   )}

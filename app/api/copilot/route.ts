@@ -26,9 +26,14 @@ import {
   executeGenerateInvestmentRoadmap,
   executeMonitorMarketSegments,
   executeDealScreener,
+  executeDldAreaBenchmark,
+  executeDldMarketPulse,
+  executeDldNotableDeals,
+  executeDldTransactionSearch,
   executeDeveloperDueDiligence,
   executeGenerateInvestorMemo,
   executePriceRealityCheck,
+  executeRefreshDldData,
 } from "@/lib/copilot/executor"
 import { collectGuardrailWarnings } from "@/lib/copilot/guardrails"
 import {
@@ -44,8 +49,15 @@ import {
   type GenerateStrategicReportInput,
   type GenerateInvestmentRoadmapInput,
   type MonitorMarketSegmentsInput,
+  type DldAreaBenchmarkInput,
+  type DldNotableDealsInput,
+  type DldTransactionSearchInput,
   areaRiskBriefInputSchema,
   compareProjectsInputSchema,
+  dldAreaBenchmarkInputSchema,
+  dldMarketPulseInputSchema,
+  dldNotableDealsInputSchema,
+  dldTransactionSearchInputSchema,
   applyDecisionLensInputSchema,
   listMarketEntitiesInputSchema,
   generateDecisionObjectInputSchema,
@@ -58,7 +70,27 @@ import {
   developerDueDiligenceInputSchema,
   generateInvestorMemoInputSchema,
   priceRealityCheckInputSchema,
+  refreshDldDataInputSchema,
 } from "@/lib/copilot/tools"
+import {
+  mcpCrossReference,
+  mcpDescribeTable,
+  mcpQuery,
+  mcpSampleData,
+  mcpTriggerScraper,
+} from "@/lib/mcp/server"
+import {
+  mcpCrossReferenceInputSchema,
+  mcpDescribeTableInputSchema,
+  mcpQueryInputSchema,
+  mcpSampleDataInputSchema,
+  mcpTriggerScraperInputSchema,
+  type McpCrossReferenceInput,
+  type McpDescribeTableInput,
+  type McpQueryInput,
+  type McpSampleDataInput,
+  type McpTriggerScraperInput,
+} from "@/lib/mcp/schemas"
 
 import {
   loadChatSession,
@@ -178,6 +210,58 @@ export async function POST(request: Request) {
         description: copilotToolDescriptions.compare_projects,
         inputSchema: compareProjectsInputSchema,
         execute: async (input: CompareProjectsInput) => withGuardrails(await executeCompareProjects(input)),
+      }),
+      dld_transaction_search: tool({
+        description: copilotToolDescriptions.dld_transaction_search,
+        inputSchema: dldTransactionSearchInputSchema,
+        execute: async (input: DldTransactionSearchInput) => withGuardrails(await executeDldTransactionSearch(input)),
+      }),
+      dld_area_benchmark: tool({
+        description: copilotToolDescriptions.dld_area_benchmark,
+        inputSchema: dldAreaBenchmarkInputSchema,
+        execute: async (input: DldAreaBenchmarkInput) => withGuardrails(await executeDldAreaBenchmark(input)),
+      }),
+      dld_market_pulse: tool({
+        description: copilotToolDescriptions.dld_market_pulse,
+        inputSchema: dldMarketPulseInputSchema,
+        execute: async () => withGuardrails(await executeDldMarketPulse()),
+      }),
+      dld_notable_deals: tool({
+        description: copilotToolDescriptions.dld_notable_deals,
+        inputSchema: dldNotableDealsInputSchema,
+        execute: async (input: DldNotableDealsInput) => withGuardrails(await executeDldNotableDeals(input)),
+      }),
+      refresh_dld_data: tool({
+        description: copilotToolDescriptions.refresh_dld_data,
+        inputSchema: refreshDldDataInputSchema,
+        execute: async () => withGuardrails(await executeRefreshDldData()),
+      }),
+      mcp_query: tool({
+        description:
+          "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, and aggregations.",
+        inputSchema: mcpQueryInputSchema,
+        execute: async (input: McpQueryInput) => withGuardrails(await mcpQuery(input)),
+      }),
+      mcp_describe_table: tool({
+        description: "Inspect a table schema: column names, data types, and row count.",
+        inputSchema: mcpDescribeTableInputSchema,
+        execute: async (input: McpDescribeTableInput) => await mcpDescribeTable(input.table_name),
+      }),
+      mcp_sample_data: tool({
+        description: "Preview sample rows from any table (1-20 rows).",
+        inputSchema: mcpSampleDataInputSchema,
+        execute: async (input: McpSampleDataInput) => await mcpSampleData(input.table_name, input.limit),
+      }),
+      mcp_cross_reference: tool({
+        description:
+          "Run pre-built analytics joins: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report.",
+        inputSchema: mcpCrossReferenceInputSchema,
+        execute: async (input: McpCrossReferenceInput) => withGuardrails(await mcpCrossReference(input)),
+      }),
+      mcp_trigger_scraper: tool({
+        description: "Trigger a live data scraper. Supports arvo_dld for DLD transactions.",
+        inputSchema: mcpTriggerScraperInputSchema,
+        execute: async (input: McpTriggerScraperInput) => await mcpTriggerScraper(input.source),
       }),
       apply_decision_lens: tool({
         description: copilotToolDescriptions.apply_decision_lens,

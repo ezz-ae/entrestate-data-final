@@ -13,6 +13,16 @@ export interface ExplorerDataCard {
   trendValue?: string
 }
 
+export interface ExplorerDldNotification {
+  headline: string
+  subline: string
+  amount: number
+  badge: string | null
+  reg_type: string
+  prop_type: string
+  is_notable: boolean
+}
+
 export interface ExplorerChatMessage {
   id: string
   role: ExplorerMessageRole
@@ -20,6 +30,7 @@ export interface ExplorerChatMessage {
   timestamp: string
   suggestions?: string[]
   dataCards?: ExplorerDataCard[]
+  notifications?: ExplorerDldNotification[]
 }
 
 export interface ExplorerChatState {
@@ -114,7 +125,12 @@ export const useExplorerChatStore = () => {
 async function fetchChatResponse(
   query: string,
   context?: { city?: string; area?: string },
-): Promise<{ content: string; dataCards?: ExplorerDataCard[]; suggestions?: string[] }> {
+): Promise<{
+  content: string
+  dataCards?: ExplorerDataCard[]
+  notifications?: ExplorerDldNotification[]
+  suggestions?: string[]
+}> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -166,6 +182,7 @@ export async function sendExplorerChatMessage(options: {
       content: response.content,
       timestamp: new Date().toISOString(),
       dataCards: response.dataCards,
+      notifications: response.notifications,
       suggestions: response.suggestions ?? options.quickSuggestions.slice(0, 3),
     }
     setExplorerChatMessages((prev) => [...prev, assistantMessage])

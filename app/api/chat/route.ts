@@ -11,25 +11,57 @@ import {
 import {
   executeAreaRiskBrief,
   executeDealScreener,
+  executeDldAreaBenchmark,
+  executeDldMarketPulse,
+  executeDldNotableDeals,
+  executeDldTransactionSearch,
   executeDeveloperDueDiligence,
   executeGenerateInvestorMemo,
   executePriceRealityCheck,
+  executeRefreshDldData,
 } from "@/lib/copilot/executor"
 import { collectGuardrailWarnings } from "@/lib/copilot/guardrails"
 import {
   type AreaRiskBriefInput,
   type DealScreenerInput,
   type DeveloperDueDiligenceInput,
+  type DldAreaBenchmarkInput,
+  type DldNotableDealsInput,
+  type DldTransactionSearchInput,
   type GenerateInvestorMemoInput,
   type PriceRealityCheckInput,
   areaRiskBriefInputSchema,
   copilotSystemPrompt,
   copilotToolDescriptions,
   dealScreenerInputSchema,
+  dldAreaBenchmarkInputSchema,
+  dldMarketPulseInputSchema,
+  dldNotableDealsInputSchema,
+  dldTransactionSearchInputSchema,
   developerDueDiligenceInputSchema,
   generateInvestorMemoInputSchema,
   priceRealityCheckInputSchema,
+  refreshDldDataInputSchema,
 } from "@/lib/copilot/tools"
+import {
+  mcpCrossReference,
+  mcpDescribeTable,
+  mcpQuery,
+  mcpSampleData,
+  mcpTriggerScraper,
+} from "@/lib/mcp/server"
+import {
+  mcpCrossReferenceInputSchema,
+  mcpDescribeTableInputSchema,
+  mcpQueryInputSchema,
+  mcpSampleDataInputSchema,
+  mcpTriggerScraperInputSchema,
+  type McpCrossReferenceInput,
+  type McpDescribeTableInput,
+  type McpQueryInput,
+  type McpSampleDataInput,
+  type McpTriggerScraperInput,
+} from "@/lib/mcp/schemas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -76,6 +108,16 @@ type ToolResultEnvelope = {
   guardrail_warnings?: unknown
 }
 
+type DldNotification = {
+  headline: string
+  subline: string
+  amount: number
+  badge: string | null
+  reg_type: string
+  prop_type: string
+  is_notable: boolean
+}
+
 function withGuardrails<T extends Record<string, unknown>>(output: T): T & { guardrail_warnings: string[] } {
   const warnings = collectGuardrailWarnings(output)
   return {
@@ -109,6 +151,16 @@ function toFiniteNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value
+  if (typeof value === "number") return value !== 0
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    return normalized === "true" || normalized === "1" || normalized === "yes"
+  }
+  return false
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
@@ -260,6 +312,45 @@ function extractRowsFromToolResults(toolResults: unknown[]): Record<string, unkn
     if (rows.length > 0) return rows
   }
   return []
+}
+
+function buildDldNotificationsFromToolResults(toolResults: unknown[]): DldNotification[] {
+  const notifications: DldNotification[] = []
+
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const record = toRecord(toolResults[index]) as ToolResultEnvelope | null
+    if (!record) continue
+
+    const source = typeof record.source === "string" ? record.source : ""
+    const rows = toRows(record.rows)
+    if (rows.length === 0) continue
+
+    const isDldFeedSource = source.includes("dld_transaction_feed")
+
+    for (const row of rows) {
+      const headline = typeof row.headline === "string" ? row.headline.trim() : ""
+      const amount = toFiniteNumber(row.amount)
+
+      if (!headline || amount === null) continue
+      if (!isDldFeedSource && !("subline" in row || "badge" in row || "is_notable" in row)) continue
+
+      notifications.push({
+        headline,
+        subline: typeof row.subline === "string" ? row.subline : "",
+        amount,
+        badge: typeof row.badge === "string" ? row.badge : null,
+        reg_type: typeof row.reg_type === "string" ? row.reg_type : "Ready",
+        prop_type: typeof row.prop_type === "string" ? row.prop_type : "Unit",
+        is_notable: toBoolean(row.is_notable),
+      })
+
+      if (notifications.length >= 12) {
+        return notifications
+      }
+    }
+  }
+
+  return notifications
 }
 
 function buildCompilerOutput(message: string) {
@@ -427,6 +518,58 @@ export async function POST(request: Request) {
         inputSchema: generateInvestorMemoInputSchema,
         execute: async (input: GenerateInvestorMemoInput) => withGuardrails(await executeGenerateInvestorMemo(input)),
       }),
+      dld_transaction_search: tool({
+        description: copilotToolDescriptions.dld_transaction_search,
+        inputSchema: dldTransactionSearchInputSchema,
+        execute: async (input: DldTransactionSearchInput) => withGuardrails(await executeDldTransactionSearch(input)),
+      }),
+      dld_area_benchmark: tool({
+        description: copilotToolDescriptions.dld_area_benchmark,
+        inputSchema: dldAreaBenchmarkInputSchema,
+        execute: async (input: DldAreaBenchmarkInput) => withGuardrails(await executeDldAreaBenchmark(input)),
+      }),
+      dld_market_pulse: tool({
+        description: copilotToolDescriptions.dld_market_pulse,
+        inputSchema: dldMarketPulseInputSchema,
+        execute: async () => withGuardrails(await executeDldMarketPulse()),
+      }),
+      dld_notable_deals: tool({
+        description: copilotToolDescriptions.dld_notable_deals,
+        inputSchema: dldNotableDealsInputSchema,
+        execute: async (input: DldNotableDealsInput) => withGuardrails(await executeDldNotableDeals(input)),
+      }),
+      refresh_dld_data: tool({
+        description: copilotToolDescriptions.refresh_dld_data,
+        inputSchema: refreshDldDataInputSchema,
+        execute: async () => withGuardrails(await executeRefreshDldData()),
+      }),
+      mcp_query: tool({
+        description:
+          "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, and aggregations.",
+        inputSchema: mcpQueryInputSchema,
+        execute: async (input: McpQueryInput) => withGuardrails(await mcpQuery(input)),
+      }),
+      mcp_describe_table: tool({
+        description: "Inspect a table schema: column names, data types, and row count.",
+        inputSchema: mcpDescribeTableInputSchema,
+        execute: async (input: McpDescribeTableInput) => await mcpDescribeTable(input.table_name),
+      }),
+      mcp_sample_data: tool({
+        description: "Preview sample rows from any table (1-20 rows).",
+        inputSchema: mcpSampleDataInputSchema,
+        execute: async (input: McpSampleDataInput) => await mcpSampleData(input.table_name, input.limit),
+      }),
+      mcp_cross_reference: tool({
+        description:
+          "Run pre-built analytics joins: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report.",
+        inputSchema: mcpCrossReferenceInputSchema,
+        execute: async (input: McpCrossReferenceInput) => withGuardrails(await mcpCrossReference(input)),
+      }),
+      mcp_trigger_scraper: tool({
+        description: "Trigger a live data scraper. Supports arvo_dld for DLD transactions.",
+        inputSchema: mcpTriggerScraperInputSchema,
+        execute: async (input: McpTriggerScraperInput) => await mcpTriggerScraper(input.source),
+      }),
     } as const
 
     const message = parsed.data.message ?? parsed.data.intent ?? ""
@@ -476,6 +619,7 @@ export async function POST(request: Request) {
 
       const rows = extractRowsFromToolResults(toolResults)
       const dataCards = rows.length > 0 ? buildDataCardsFromRows(rows) : undefined
+      const notifications = buildDldNotificationsFromToolResults(toolResults)
       const confidenceWarnings = collectToolWarnings(toolResults)
       const toolSummary = toolResults.length > 0 ? JSON.stringify(toolResults[toolResults.length - 1]).slice(0, 1200) : ""
       const content = text.length > 0
@@ -488,6 +632,7 @@ export async function POST(request: Request) {
         {
           content,
           dataCards,
+          notifications: notifications.length > 0 ? notifications : undefined,
           suggestions: defaultSuggestions,
           evidence: {
             sources_used: collectSources(toolResults),
