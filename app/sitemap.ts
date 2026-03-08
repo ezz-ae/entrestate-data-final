@@ -1,66 +1,84 @@
 import type { MetadataRoute } from "next"
+import { blogPosts } from "@/lib/blog-data"
+import { docsArticles } from "@/lib/docs-articles"
+import { libraryArticles } from "@/lib/library-data"
+import { getSiteUrl } from "@/lib/seo"
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://entrestate.com"
+const baseUrl = getSiteUrl()
 
-const routes = [
+const staticRoutes = [
   "",
-  "/chat",
-  "/search",
-  "/map",
-  "/tables",
-  "/notes",
-  "/reports",
-  "/artifacts",
-  "/automations",
-  "/settings/brand",
-  "/settings/profile",
-  "/settings/tier",
-  "/markets",
-  "/top-data",
-  "/library",
-  "/library/reports",
-  "/library/insights",
-  "/library/contracts-explained",
-  "/workspace",
-  "/os",
-  "/agent-runtime",
-  "/workspace/data-scientist",
-  "/workspace/data-scientist/notebook",
-  "/market-score",
-  "/workspace/daas",
-  "/workspace/agent-creator",
-  "/apps",
-  "/apps/agent-builder",
-  "/apps/lead-agent",
-  "/apps/coldcalling",
-  "/apps/docs/storyboard-builder",
-  "/apps/docs/launch-timeline",
-  "/apps/docs/image-playground",
-  "/apps/docs/agent-first-builder",
-  "/apps/docs/cold-calling",
-  "/apps/docs/insta-dm-lead-agent",
-  "/agents",
-  "/agents/sessions",
-  "/agents/contracts",
-  "/agents/onboarding",
-  "/storyboard",
-  "/image-playground",
-  "/timeline",
   "/about",
   "/contact",
   "/support",
   "/status",
-  "/roadmap",
   "/changelog",
+  "/roadmap",
   "/privacy",
   "/terms",
-  "/account",
+  "/cookies",
+  "/data-usage",
+  "/overview",
+  "/search",
+  "/market-score",
+  "/top-data",
+  "/areas",
+  "/developers",
+  "/properties",
+  "/markets",
+  "/reports/library",
+  "/reports/generated",
+  "/library",
+  "/library/reports",
+  "/library/insights",
+  "/library/contracts-explained",
+  "/blog",
+  "/docs",
+  "/docs/articles",
+  "/docs/documentation",
+  "/docs/partners-apis",
+  "/docs/data-information",
+  "/docs/industry",
+  "/docs/careers-intern",
+  "/docs/investors-relations",
+  "/investor-relations",
+  "/careers",
+  "/media",
+  "/plans",
+  "/pricing",
+  "/reports",
 ]
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date()
-  return routes.map((route) => ({
+
+  const staticEntries = staticRoutes.map((route) => ({
     url: `${baseUrl}${route}`,
     lastModified,
+    changeFrequency: route === "" ? "daily" : "weekly",
+    priority: route === "" ? 1 : 0.7,
   }))
+
+  const blogEntries = blogPosts.map((post) => ({
+    url: `${baseUrl}/blog/${post.slug}`,
+    lastModified: new Date(post.publishedAt),
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }))
+
+  const docsArticleEntries = docsArticles.map((article) => ({
+    url: `${baseUrl}/docs/articles/${article.slug}`,
+    lastModified,
+    changeFrequency: "monthly" as const,
+    priority: 0.75,
+  }))
+
+  const libraryEntries = libraryArticles.map((article) => ({
+    url: `${baseUrl}/library/${article.slug}`,
+    lastModified,
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }))
+
+  return [...staticEntries, ...blogEntries, ...docsArticleEntries, ...libraryEntries]
 }

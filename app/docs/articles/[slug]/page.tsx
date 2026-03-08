@@ -3,6 +3,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, CircleCheck } from "lucide-react"
 import { docsArticles, getArticleBySlug } from "@/lib/docs-articles"
+import { SEO, absoluteUrl } from "@/lib/seo"
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -19,12 +20,34 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!article) {
     return {
       title: "Article Not Found - Entrestate Docs",
+      robots: {
+        index: false,
+        follow: false,
+      },
     }
   }
 
+  const url = `/docs/articles/${article.slug}`
+
   return {
-    title: `${article.title} - Entrestate Docs`,
+    title: article.title,
     description: article.summary,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title: `${article.title} | ${SEO.siteName} Docs`,
+      description: article.summary,
+      url,
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${article.title} | ${SEO.siteName} Docs`,
+      description: article.summary,
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+    },
   }
 }
 
@@ -36,8 +59,32 @@ export default async function DocsArticlePage({ params }: Props) {
     notFound()
   }
 
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.title,
+    description: article.summary,
+    mainEntityOfPage: absoluteUrl(`/docs/articles/${article.slug}`),
+    author: {
+      "@type": "Organization",
+      name: SEO.siteName,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: SEO.siteName,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/icon.svg"),
+      },
+    },
+  }
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       <Link href="/docs/articles" className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" />
         Back to articles
@@ -76,4 +123,3 @@ export default async function DocsArticlePage({ params }: Props) {
     </>
   )
 }
-

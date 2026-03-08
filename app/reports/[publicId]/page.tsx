@@ -1,11 +1,58 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { prisma } from "@/lib/prisma"
 import { ReadingControls } from "@/components/reading-controls"
 import { ExplainWithChat } from "@/components/explain-with-chat"
+import { SEO, absoluteUrl } from "@/lib/seo"
 
-export default async function ReportPage({ params }: { params: Promise<{ publicId: string }> }) {
+type ReportParams = { params: Promise<{ publicId: string }> }
+
+export async function generateMetadata({ params }: ReportParams): Promise<Metadata> {
+  const { publicId } = await params
+  const report = await prisma.assistantReport.findUnique({
+    where: { publicId },
+    select: { title: true, publicId: true, createdAt: true, payload: true },
+  })
+
+  if (!report) {
+    return {
+      title: "Report Not Found",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    }
+  }
+
+  const transcript = ((report.payload as { transcript?: string } | null)?.transcript ?? "").trim()
+  const description = transcript ? `${transcript.slice(0, 150)}...` : "Investor-grade market intelligence report by Entrestate."
+  const url = `/reports/${report.publicId}`
+
+  return {
+    title: report.title,
+    description,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title: `${report.title} | ${SEO.siteName}`,
+      description,
+      url,
+      type: "article",
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${report.title} | ${SEO.siteName}`,
+      description,
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+    },
+  }
+}
+
+export default async function ReportPage({ params }: ReportParams) {
   const { publicId } = await params
   const report = await prisma.assistantReport.findUnique({
     where: { publicId },
@@ -31,11 +78,32 @@ export default async function ReportPage({ params }: { params: Promise<{ publicI
             scope: any,
             timeRange: any,
         }
-    }
+            }
   };
+
+  const reportJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Report",
+    headline: report.title,
+    datePublished: report.createdAt.toISOString(),
+    dateModified: report.updatedAt.toISOString(),
+    publisher: {
+      "@type": "Organization",
+      name: SEO.siteName,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/icon.svg"),
+      },
+    },
+    mainEntityOfPage: absoluteUrl(`/reports/${report.publicId}`),
+  }
 
   return (
     <main id="main-content">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(reportJsonLd) }}
+      />
       <Navbar />
       <div className="pt-28 pb-20 md:pt-36 md:pb-32">
         <div className="container mx-auto px-6">

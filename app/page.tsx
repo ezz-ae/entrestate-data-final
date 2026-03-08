@@ -1,11 +1,36 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Sparkles, ArrowRight, Building2, Map, Users2, BarChart3, ShieldCheck } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { getMarketPulseSummary } from "@/lib/frontend-content"
 import { formatAed } from "@/components/decision/formatters"
+import { SEO, absoluteUrl } from "@/lib/seo"
 
 export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = {
+  title: "UAE Real Estate Decision Intelligence",
+  description:
+    "Analyze UAE property markets with evidence-backed scoring, developer reliability signals, and investor-grade decision workflows.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: SEO.defaultTitle,
+    description:
+      "Analyze UAE property markets with evidence-backed scoring, developer reliability signals, and investor-grade decision workflows.",
+    url: "/",
+    images: [absoluteUrl(SEO.defaultOgImagePath)],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SEO.defaultTitle,
+    description:
+      "Analyze UAE property markets with evidence-backed scoring, developer reliability signals, and investor-grade decision workflows.",
+    images: [absoluteUrl(SEO.defaultOgImagePath)],
+  },
+}
 
 const SURFACES = [
   {
@@ -57,8 +82,34 @@ export default async function HomePage() {
   const avgYield = pulse.summary.avg_yield
   const avgPrice = pulse.summary.avg_price
 
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: SEO.siteName,
+        url: absoluteUrl("/"),
+        logo: absoluteUrl("/icon.svg"),
+      },
+      {
+        "@type": "WebSite",
+        name: SEO.siteName,
+        url: absoluteUrl("/"),
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${absoluteUrl("/search")}?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  }
+
   return (
     <main id="main-content">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <Navbar />
 
       <div className="mx-auto max-w-[1100px] px-6 pb-24 pt-32 md:pt-44">

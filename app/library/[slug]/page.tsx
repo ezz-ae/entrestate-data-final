@@ -1,11 +1,54 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Clock, ArrowRight } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
-import { getLibraryArticle } from "@/lib/library-data"
+import { getLibraryArticle, libraryArticles } from "@/lib/library-data"
 import { ReadingControls } from "@/components/reading-controls"
 import { ExplainWithChat } from "@/components/explain-with-chat"
+import { SEO, absoluteUrl } from "@/lib/seo"
+
+export async function generateStaticParams() {
+  return libraryArticles.map((article) => ({ slug: article.slug }))
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const article = getLibraryArticle(slug)
+
+  if (!article) {
+    return {
+      title: "Library Article Not Found",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    }
+  }
+
+  const url = `/library/${article.slug}`
+  return {
+    title: article.title,
+    description: article.description,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title: `${article.title} | ${SEO.siteName}`,
+      description: article.description,
+      url,
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${article.title} | ${SEO.siteName}`,
+      description: article.description,
+      images: [absoluteUrl(SEO.defaultOgImagePath)],
+    },
+  }
+}
 
 export default async function LibraryArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -15,8 +58,33 @@ export default async function LibraryArticlePage({ params }: { params: Promise<{
     notFound()
   }
 
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.title,
+    description: article.description,
+    datePublished: article.date,
+    mainEntityOfPage: absoluteUrl(`/library/${article.slug}`),
+    author: {
+      "@type": "Organization",
+      name: SEO.siteName,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: SEO.siteName,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/icon.svg"),
+      },
+    },
+  }
+
   return (
     <main id="main-content">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       <Navbar />
       <div className="pt-28 pb-20 md:pt-36 md:pb-32">
         <div className="container mx-auto px-6">

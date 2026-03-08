@@ -1,4 +1,5 @@
 import type React from "react"
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -11,11 +12,52 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Calendar, Clock, Share2, Twitter, Linkedin } from "lucide-react"
 import { getBlogPost, blogPosts } from "@/lib/blog-data"
 import { SyntaxHighlighter } from "@/lib/syntax-highlighter"
+import { SEO, absoluteUrl } from "@/lib/seo"
 
 export async function generateStaticParams() {
   return blogPosts.map((post) => ({
     slug: post.slug,
   }))
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const post = getBlogPost(slug)
+
+  if (!post) {
+    return {
+      title: "Article Not Found",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    }
+  }
+
+  const url = `/blog/${post.slug}`
+
+  return {
+    title: post.title,
+    description: post.excerpt,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      type: "article",
+      url,
+      title: `${post.title} | ${SEO.siteName}`,
+      description: post.excerpt,
+      images: [absoluteUrl(post.coverImage || SEO.defaultOgImagePath)],
+      publishedTime: post.publishedAt,
+      authors: [post.author.name],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${post.title} | ${SEO.siteName}`,
+      description: post.excerpt,
+      images: [absoluteUrl(post.coverImage || SEO.defaultOgImagePath)],
+    },
+  }
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -33,6 +75,28 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const twitterUrl = `https://twitter.com/intent/tweet?text=${shareText}&url=${encodedUrl}`
   const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`
   const mailtoUrl = `mailto:?subject=${shareText}&body=${encodedUrl}`
+  const blogJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt,
+    datePublished: post.publishedAt,
+    dateModified: post.publishedAt,
+    author: {
+      "@type": "Person",
+      name: post.author.name,
+    },
+    image: absoluteUrl(post.coverImage || SEO.defaultOgImagePath),
+    mainEntityOfPage: articleUrl,
+    publisher: {
+      "@type": "Organization",
+      name: SEO.siteName,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/icon.svg"),
+      },
+    },
+  }
 
   const renderContent = (content: string) => {
     const lines = content.trim().split("\n")
@@ -239,6 +303,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <ScrollToTop />
       <GridBackground />
       <Navbar />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(blogJsonLd) }}
+      />
 
       <main id="main-content" className="relative z-10 pt-32 pb-20">
         <article className="container mx-auto px-6 max-w-4xl">
