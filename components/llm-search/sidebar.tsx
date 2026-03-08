@@ -234,7 +234,7 @@ function UserIcon(props: any) {
 }
 
 export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }) {
-  const { messages, sendMessage, status, error, stop, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
+  const { messages, sendMessage, clearError, status, error, stop, isSidebarOpen, closeSidebar, toggleSidebar, id: currentId, openSidebar } = useCopilot()
   const [input, setInput] = useState("")
   const [isDesktopViewport, setIsDesktopViewport] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -248,8 +248,8 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const hasOpenChatQuery = searchParams.get("openChat") === "true"
-  const querySessionId = searchParams.get("id")
+  const hasOpenChatQuery = searchParams?.get("openChat") === "true"
+  const querySessionId = searchParams?.get("id")
 
   // Handle auto-open and session loading from URL
   useEffect(() => {
@@ -346,6 +346,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
     }
 
     setLocalError(null)
+    clearError()
     try {
       await sendMessage({ text: trimmedPrompt })
       return true

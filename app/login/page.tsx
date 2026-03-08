@@ -14,13 +14,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const toFriendlyAuthError = (message?: string | null) => {
     const normalized = (message ?? "").toLowerCase()
     if (normalized.includes("invalid origin")) {
-      return "Auth domain is not trusted. Add this site URL to Neon Auth trusted origins, then retry."
+      const currentOrigin = typeof window !== "undefined" ? window.location.origin : "this site origin"
+      return `Auth domain is not trusted. Add ${currentOrigin} to Neon Auth trusted origins (with and without www), then retry.`
     }
     return message || "Unable to sign in. Please try again."
   }
@@ -70,6 +72,30 @@ export default function LoginPage() {
       setFormError(toFriendlyAuthError(err instanceof Error ? err.message : null))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setFormError(null)
+    setIsGoogleLoading(true)
+
+    try {
+      const { error } = await withTimeout(
+        authClient.signIn.social({
+          provider: "google",
+          callbackURL: "/workspace",
+        }),
+        15000,
+        "Google sign-in timed out. Check Neon Auth settings and try again.",
+      )
+
+      if (error) {
+        setFormError(toFriendlyAuthError(error.message))
+      }
+    } catch (err) {
+      setFormError(toFriendlyAuthError(err instanceof Error ? err.message : null))
+    } finally {
+      setIsGoogleLoading(false)
     }
   }
 
@@ -132,6 +158,25 @@ export default function LoginPage() {
               <p className="text-muted-foreground mt-2 text-sm">Sign in to your Entrestate account</p>
             </div>
 
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full mb-4"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading || isGoogleLoading}
+            >
+              {isGoogleLoading ? "Connecting to Google..." : "Continue with Google"}
+            </Button>
+
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
@@ -180,7 +225,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 mt-2"
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
               >
                 {isLoading ? "Signing in..." : "Sign in"}
               </Button>

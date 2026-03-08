@@ -574,7 +574,7 @@ export function ChatInterface({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0)
   const [canvasOpen, setCanvasOpen] = useState(false)
 
-  const { messages, sendMessage, status, error, stop } = useCopilot()
+  const { messages, sendMessage, clearError, status, error, stop } = useCopilot()
 
   useEffect(() => {
     if (!mounted) return;
@@ -881,10 +881,13 @@ export function ChatInterface({
     }
 
     setLimitMessage(null)
-    await sendMessage({
-      role: "user",
-      parts: [{ type: "text", text: cleanedPrompt }],
-    })
+    clearError()
+    try {
+      await sendMessage({ text: cleanedPrompt })
+    } catch (err) {
+      console.error("Chat send error:", err)
+      return
+    }
 
     if (limit !== null) {
       setRemaining((prev) => {
@@ -1119,55 +1122,72 @@ export function ChatInterface({
 
   if (!hasConversation) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10">
-            <Sparkles className="h-6 w-6 text-primary" />
+      <div className="mx-auto w-full max-w-3xl">
+
+        {/* ── Hero header ── */}
+        <div className="mb-10 text-center">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/8 px-4 py-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_2px_rgba(20,184,166,0.5)]" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-primary/80">
+              Decision Intelligence · Live UAE Data
+            </span>
           </div>
-          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Real Estate AI Chat</h1>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-            Screen properties, compare markets, stress test investments, and generate investor memos — powered by live UAE data.
+          <h1 className="font-serif text-3xl font-medium text-foreground md:text-4xl lg:text-5xl">
+            What's your investment<br className="hidden sm:block" /> question?
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+            Screen properties, compare markets, stress-test cash flows, and generate institutional memos — all from a single prompt.
           </p>
         </div>
 
-        {/* Capability tiles */}
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {capabilityCards.map((card) => {
+        {/* ── Capability tiles ── */}
+        <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {capabilityCards.map((card, i) => {
             const Icon = card.icon
+            const accents = [
+              { border: "hover:border-blue-500/40", bar: "bg-blue-500", icon: "text-blue-400", example: "text-blue-400/60" },
+              { border: "hover:border-violet-500/40", bar: "bg-violet-500", icon: "text-violet-400", example: "text-violet-400/60" },
+              { border: "hover:border-emerald-500/40", bar: "bg-emerald-500", icon: "text-emerald-400", example: "text-emerald-400/60" },
+              { border: "hover:border-amber-500/40", bar: "bg-amber-500", icon: "text-amber-400", example: "text-amber-400/60" },
+            ]
+            const a = accents[i % accents.length]
             return (
               <button
                 key={card.label}
                 type="button"
                 disabled={chatBlocked}
                 onClick={() => void sendPrompt(card.prompt)}
-                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/70 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
+                className={`group relative flex items-start gap-4 overflow-hidden rounded-xl border border-border/40 bg-card/50 p-4 text-left transition-all duration-200 hover:bg-card hover:shadow-md hover:shadow-black/10 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${a.border}`}
               >
-                <div className="mb-3 flex items-center gap-2.5">
-                  <div className="rounded-xl border border-border/50 bg-background/60 p-2">
-                    <Icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <span className="text-sm font-semibold text-foreground">{card.label}</span>
+                {/* Left accent bar */}
+                <div className={`absolute left-0 top-0 h-full w-0.5 ${a.bar} opacity-0 transition-opacity duration-200 group-hover:opacity-60`} />
+
+                <div className={`mt-0.5 shrink-0 rounded-lg border border-border/40 bg-background/60 p-2 ${a.icon}`}>
+                  <Icon className="h-3.5 w-3.5" />
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">{card.description}</p>
-                <p className="mt-2 line-clamp-1 text-[11px] text-primary/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                  → {card.example}
-                </p>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{card.label}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/70">{card.description}</p>
+                  <p className={`mt-1.5 truncate text-[11px] font-mono opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${a.example}`}>
+                    {card.example}
+                  </p>
+                </div>
               </button>
             )
           })}
         </div>
 
-        {/* Input card */}
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70">
+        {/* ── Input ── */}
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm">
           <form onSubmit={submitMessage}>
             <div className="relative p-4 pb-2">
               <Textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => { void onInputKeyDown(event) }}
-                placeholder="Ask about a project, area, or investment scenario. Type / for quick commands."
-                className="min-h-28 resize-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
+                placeholder="Describe your investment goal, budget, or a specific project to analyse…"
+                className="min-h-24 resize-none border-0 bg-transparent p-0 text-sm shadow-none placeholder:text-muted-foreground/40 focus-visible:ring-0 md:text-base"
                 disabled={chatBlocked}
               />
 
@@ -1199,23 +1219,23 @@ export function ChatInterface({
               ) : null}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-border/50 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-border/40 px-4 py-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 {slashCommands.slice(0, 4).map((cmd) => (
                   <button
                     key={cmd.id}
                     type="button"
                     onClick={() => setInput(`/${cmd.id}`)}
-                    className="rounded-full border border-border/60 bg-background/60 px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                    className="rounded-full border border-border/50 bg-background/50 px-2.5 py-0.5 text-[11px] font-mono text-muted-foreground/60 transition hover:border-primary/40 hover:text-primary"
                   >
                     /{cmd.id}
                   </button>
                 ))}
-                <span className="hidden text-[11px] text-muted-foreground sm:block">· ⌘↵ to send</span>
+                <span className="hidden text-[10px] text-muted-foreground/30 sm:block">· ⌘↵ to send</span>
               </div>
               <div className="flex flex-shrink-0 items-center gap-3">
                 {limit !== null ? (
-                  <p className="hidden text-xs text-muted-foreground sm:block">
+                  <p className="hidden text-xs text-muted-foreground/50 sm:block">
                     {Math.max(remaining ?? 0, 0)}/{limit} left
                   </p>
                 ) : null}

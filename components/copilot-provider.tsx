@@ -1,10 +1,12 @@
 "use client"
 
 import { createContext, useContext, ReactNode, useState, useCallback } from "react"
-import { useChat, type UseChatHelpers } from "@ai-sdk/react"
+import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 
-type CopilotContextValue = UseChatHelpers<any> & {
+type ChatHelpers = ReturnType<typeof useChat>
+
+type CopilotContextValue = ChatHelpers & {
   isSidebarOpen: boolean
   toggleSidebar: () => void
   openSidebar: () => void

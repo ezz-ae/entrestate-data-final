@@ -5,14 +5,27 @@ type AuthParams = { params: Promise<{ path: string[] }> }
 
 const auth = getAuth()
 const handler = auth?.handler()
+const authBaseUrl = process.env.NEON_AUTH_BASE_URL?.replace(/\/+$/, "") ?? ""
+const trustedOriginOverride =
+  process.env.NEON_AUTH_TRUSTED_ORIGIN?.trim().replace(/\/+$/, "") ||
+  process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "") ||
+  ""
+
+function firstHeaderValue(value: string | null) {
+  return value?.split(",")[0]?.trim() || ""
+}
 
 function deriveOrigin(request: Request) {
-  const directOrigin = request.headers.get("origin")?.trim()
+  if (trustedOriginOverride) {
+    return trustedOriginOverride
+  }
+
+  const directOrigin = firstHeaderValue(request.headers.get("origin"))
   if (directOrigin) return directOrigin
 
-  const forwardedHost = request.headers.get("x-forwarded-host")?.trim()
-  const host = forwardedHost || request.headers.get("host")?.trim()
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.trim()
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"))
+  const host = forwardedHost || firstHeaderValue(request.headers.get("host"))
+  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"))
   const proto = forwardedProto || (host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https")
 
   if (host) {
@@ -22,20 +35,76 @@ function deriveOrigin(request: Request) {
   return new URL(request.url).origin
 }
 
-function withOriginHeader(request: Request) {
-  if (request.headers.get("origin")) {
-    return request
+async function proxyEmailAuth(request: Request, context: AuthParams) {
+  if (!authBaseUrl) {
+    return missingAuth(request, context)
   }
 
-  const headers = new Headers(request.headers)
-  headers.set("origin", deriveOrigin(request))
+  const params = await context.params
+  const path = params?.path ?? []
+  const joinedPath = path.join("/")
+  const isAuthWritePath = joinedPath.startsWith("sign-in/") || joinedPath.startsWith("sign-up/")
 
-  return new Request(request.url, {
-    method: request.method,
-    headers,
-    body: request.body,
-    duplex: "half",
-  } as RequestInit)
+  if (request.method !== "POST" || !isAuthWritePath) {
+    return null
+  }
+
+  const upstreamUrl = new URL(`${authBaseUrl}/${joinedPath}`)
+  upstreamUrl.search = new URL(request.url).search
+
+  const upstreamHeaders = new Headers()
+  const passthroughHeaders = ["content-type", "user-agent", "accept-language", "authorization", "referer"]
+  for (const header of passthroughHeaders) {
+    const value = request.headers.get(header)
+    if (value) upstreamHeaders.set(header, value)
+  }
+
+  const cookie = request.headers.get("cookie")
+  if (cookie) {
+    upstreamHeaders.set("cookie", cookie)
+  }
+
+  upstreamHeaders.set("origin", deriveOrigin(request))
+  upstreamHeaders.set("x-neon-auth-middleware", "true")
+
+  const body = await request.text()
+
+  try {
+    const upstreamResponse = await fetch(upstreamUrl.toString(), {
+      method: "POST",
+      headers: upstreamHeaders,
+      body,
+      redirect: "manual",
+    })
+
+    const responseHeaders = new Headers()
+    const allowlistHeaders = [
+      "content-type",
+      "cache-control",
+      "x-neon-ret-request-id",
+      "location",
+    ]
+
+    for (const header of allowlistHeaders) {
+      const value = upstreamResponse.headers.get(header)
+      if (value) responseHeaders.set(header, value)
+    }
+
+    const getSetCookie = (upstreamResponse.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie
+    if (typeof getSetCookie === "function") {
+      for (const setCookieValue of getSetCookie.call(upstreamResponse.headers)) {
+        responseHeaders.append("set-cookie", setCookieValue)
+      }
+    }
+
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: responseHeaders,
+    })
+  } catch {
+    return NextResponse.json({ error: "Unable to connect to Neon Auth." }, { status: 502 })
+  }
 }
 
 const missingAuth = async (_request: Request, context: AuthParams) => {
@@ -48,9 +117,16 @@ const missingAuth = async (_request: Request, context: AuthParams) => {
 }
 
 export const GET = handler?.GET ?? (async (request: Request, context: AuthParams) => missingAuth(request, context))
-export const POST = handler?.POST
-  ? async (request: Request, context: AuthParams) => handler.POST(withOriginHeader(request), context)
-  : async (request: Request, context: AuthParams) => missingAuth(request, context)
+export const POST = async (request: Request, context: AuthParams) => {
+  const proxied = await proxyEmailAuth(request, context)
+  if (proxied) return proxied
+
+  if (handler?.POST) {
+    return handler.POST(request, context)
+  }
+
+  return missingAuth(request, context)
+}
 export const PUT = handler?.PUT ?? (async (request: Request, context: AuthParams) => missingAuth(request, context))
 export const DELETE = handler?.DELETE ?? (async (request: Request, context: AuthParams) => missingAuth(request, context))
 export const PATCH = handler?.PATCH ?? (async (request: Request, context: AuthParams) => missingAuth(request, context))

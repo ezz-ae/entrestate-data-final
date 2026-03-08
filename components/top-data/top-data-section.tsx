@@ -23,15 +23,24 @@ const DEFAULT_HIERARCHY = [
 const DEFAULT_ENGINES = ["God Metric", "Affordability", "Stress Test", "Goal Alignment"]
 
 function asArray(value: unknown) {
-  return Array.isArray(value) ? value : []
+  const normalized = normalizeJsonPayload(value)
+  return Array.isArray(normalized) ? normalized : []
 }
 
 function asObject(value: unknown): GenericObject {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as GenericObject) : {}
+  const normalized = normalizeJsonPayload(value)
+  return normalized && typeof normalized === "object" && !Array.isArray(normalized) ? (normalized as GenericObject) : {}
 }
 
 function asNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const cleaned = value.replace(/,/g, "").trim()
+    if (!cleaned) return null
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 function asText(value: unknown, fallback = "—") {
@@ -65,12 +74,32 @@ function valueFromKeys(record: GenericObject, keys: string[]) {
   return undefined
 }
 
-function dataToRecords(data: unknown): GenericObject[] {
-  if (Array.isArray(data)) {
-    return data.filter((row) => row && typeof row === "object" && !Array.isArray(row)) as GenericObject[]
+function normalizeJsonPayload(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value
   }
 
-  const payload = asObject(data)
+  const trimmed = value.trim()
+  if (!trimmed) return value
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return value
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return value
+  }
+}
+
+function dataToRecords(data: unknown): GenericObject[] {
+  const normalizedData = normalizeJsonPayload(data)
+
+  if (Array.isArray(normalizedData)) {
+    return normalizedData
+      .map((row) => normalizeJsonPayload(row))
+      .filter((row) => row && typeof row === "object" && !Array.isArray(row)) as GenericObject[]
+  }
+
+  const payload = asObject(normalizedData)
 
   for (const key of [
     "rows",
@@ -82,10 +111,28 @@ function dataToRecords(data: unknown): GenericObject[] {
     "intents",
     "tiers",
     "distribution",
+    "results",
+    "records",
+    "entries",
+    "list",
   ]) {
-    const value = payload[key]
+    const value = normalizeJsonPayload(payload[key])
     if (Array.isArray(value)) {
-      return value.filter((row) => row && typeof row === "object" && !Array.isArray(row)) as GenericObject[]
+      return value
+        .map((row) => normalizeJsonPayload(row))
+        .filter((row) => row && typeof row === "object" && !Array.isArray(row)) as GenericObject[]
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = asObject(value)
+      for (const nestedKey of ["rows", "items", "data", "records", "list"]) {
+        const nestedValue = normalizeJsonPayload(nested[nestedKey])
+        if (Array.isArray(nestedValue)) {
+          return nestedValue
+            .map((row) => normalizeJsonPayload(row))
+            .filter((row) => row && typeof row === "object" && !Array.isArray(row)) as GenericObject[]
+        }
+      }
     }
   }
 
