@@ -22,6 +22,22 @@ import Image from "next/image"
 import { UpgradeModal } from "./upgrade-modal"
 import { AccountMenu } from "./account-menu"
 
+function getMessageText(message: any): string {
+  if (typeof message?.content === "string") {
+    return message.content
+  }
+
+  if (Array.isArray(message?.parts)) {
+    return message.parts
+      .filter((part: any) => part?.type === "text" && typeof part?.text === "string")
+      .map((part: any) => part.text)
+      .join("\n")
+      .trim()
+  }
+
+  return ""
+}
+
 // ── Inline markdown renderer ─────────────────────────────────────────────────
 
 function inlineFormat(text: string): React.ReactNode[] {
@@ -149,7 +165,7 @@ function MarkdownContent({ content }: { content: string }) {
 function MessageBubble({ message }: { message: any }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const isUser = message.role === "user"
-  const content = typeof message.content === "string" ? message.content : ""
+  const content = getMessageText(message)
   const isLong = isUser && content.length > 300
 
   return (
@@ -226,6 +242,7 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
   const [pinnedPanel, setPinnedPanel] = useState<string | null>(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
   const [historyItems, setHistoryItems] = useState<any[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -317,16 +334,30 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
 
   const isBusy = status === "submitted" || status === "streaming"
 
+  const sendPrompt = async (prompt: string) => {
+    const trimmedPrompt = prompt.trim()
+    if (!trimmedPrompt || isBusy) {
+      return false
+    }
+
+    setLocalError(null)
+    try {
+      await sendMessage({ text: trimmedPrompt })
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to send message."
+      setLocalError(message)
+      return false
+    }
+  }
+
   const submitMessage = async (event?: FormEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>) => {
     event?.preventDefault()
 
-    const trimmedInput = input.trim()
-    if (!trimmedInput || isBusy) {
-      return
+    const submitted = await sendPrompt(input)
+    if (submitted) {
+      setInput("")
     }
-
-    await sendMessage({ text: trimmedInput })
-    setInput("")
   }
 
   // If the global sidebar is open, force the panel open.
@@ -576,7 +607,8 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                       ].map(({ label, prompt }) => (
                         <button
                           key={label}
-                          onClick={() => { void sendMessage({ text: prompt }) }}
+                          onClick={() => { void sendPrompt(prompt) }}
+                          disabled={isBusy}
                           className="p-3 rounded-xl bg-muted/40 border border-border/50 text-left text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground hover:border-border transition-all duration-150"
                         >
                           <span className="block font-medium text-foreground/80 mb-0.5">{label}</span>
@@ -610,8 +642,9 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                     {["Tell me more", "What are the risks?", "Summarize", "Generate a report"].map((prompt) => (
                       <button
                         key={prompt}
-                        onClick={() => { void sendMessage({ text: prompt }) }}
-                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        onClick={() => { void sendPrompt(prompt) }}
+                        disabled={isBusy}
+                        className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors disabled:opacity-50"
                       >
                         {prompt}
                       </button>
@@ -645,9 +678,9 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
-                {error ? (
+                {localError || error ? (
                   <p className="mt-2 text-xs text-amber-600">
-                    {error.message}
+                    {localError ?? error?.message}
                   </p>
                 ) : null}
               </div>

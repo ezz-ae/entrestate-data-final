@@ -834,13 +834,13 @@ function ReadingToolbar({
     executive: <Presentation className="h-4 w-4" />,
   }
 
-  const btnBase = "reader-no-print flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
+  const btnBase = "reader-no-print shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
   const btnStyle = { background: "var(--reader-evidence-bg)", color: "var(--reader-text)", border: "1px solid var(--reader-border)" }
   const activeBtnStyle = { background: "var(--reader-gold)", color: "white", border: "1px solid var(--reader-gold)" }
 
   return (
     <div
-      className="reader-no-print sticky top-0 z-[110] flex items-center gap-2 px-5 py-2.5"
+      className="reader-no-print sticky top-0 z-[110] flex items-center gap-2 px-5 py-2.5 overflow-x-auto scrollbar-none"
       style={{
         background: "var(--reader-bg)",
         borderBottom: "1px solid var(--reader-border)",

@@ -3,7 +3,7 @@
 import type { ComponentType, ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bot, Command, FileText, Handshake, Building2, Briefcase, BarChart3, BookOpen } from "lucide-react"
+import { Bot, Command, FileText, Handshake, Building2, Briefcase, BarChart3, BookOpen, Server, ShieldCheck } from "lucide-react"
 
 type DocsNavItem = {
   title: string
@@ -46,6 +46,13 @@ const docsNavGroups: DocsNavGroup[] = [
       { title: "Changelog", href: "/changelog", icon: FileText },
       { title: "Roadmap", href: "/roadmap", icon: FileText },
       { title: "Support", href: "/support", icon: FileText },
+    ],
+  },
+  {
+    title: "Engineering",
+    items: [
+      { title: "Deployment Architecture", href: "/docs/deployment-architecture", icon: Server },
+      { title: "CTO Deployment Review", href: "/docs/cto-deployment-review", icon: ShieldCheck },
     ],
   },
   {

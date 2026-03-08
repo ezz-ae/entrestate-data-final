@@ -51,10 +51,7 @@ export default async function AreasPage() {
           })()}
         </div>
 
-import { AreasView } from "@/components/decision/areas-view"
-...
         <AreasView areas={data.areas} />
-...
       </div>
       <Footer />
     </main>

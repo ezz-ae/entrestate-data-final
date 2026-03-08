@@ -1,31 +1,55 @@
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
-import { CheckCircle2, Clock, Database, AlertCircle } from "lucide-react"
+import { CheckCircle2, Clock, Database, AlertCircle, Server, Shield, Zap, BarChart3 } from "lucide-react"
 import { getDataFreshnessStatus, getMarketPulse } from "@/lib/decision-infrastructure"
+import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
 const services = [
   {
+    name: "AI Copilot",
+    status: "Operational",
+    detail: "Streaming responses live · Claude Sonnet 4.6",
+    icon: Zap,
+  },
+  {
     name: "Market data feed",
     status: "Operational",
-    detail: "Live delivery running",
+    detail: "10-phase pipeline · Last cycle completed on schedule",
+    icon: Database,
   },
   {
-    name: "Investor desk insights",
+    name: "Decision engine",
     status: "Operational",
-    detail: "Market views online",
+    detail: "Properties, Areas, Developers scoring active",
+    icon: BarChart3,
   },
   {
-    name: "Media workflows",
+    name: "Authentication",
     status: "Operational",
-    detail: "Storyboards and timelines stable",
+    detail: "Clerk · Session issuance normal",
+    icon: Shield,
   },
   {
-    name: "Data desk",
+    name: "Report generation",
     status: "Operational",
-    detail: "Reports and briefs available",
+    detail: "Artifact persistence to Neon active",
+    icon: Server,
   },
+  {
+    name: "Investor desk",
+    status: "Operational",
+    detail: "Market views and briefs available",
+    icon: BarChart3,
+  },
+]
+
+const sloTargets = [
+  { metric: "Platform uptime", target: "99.5%", period: "Monthly" },
+  { metric: "API p95 response", target: "< 800 ms", period: "Continuous" },
+  { metric: "Data freshness", target: "< 24 h", period: "Per pipeline cycle" },
+  { metric: "Rollback RTO", target: "< 60 s", period: "Per incident" },
 ]
 
 const incidents = [
@@ -86,12 +110,28 @@ export default async function StatusPage() {
       <div className="mx-auto max-w-[1200px] px-6 pb-20 pt-28 md:pt-36">
 
         {/* Page header */}
-        <header className="mb-8">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
-          <h1 className="mt-2 text-3xl font-semibold text-foreground md:text-5xl">System Health</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Live availability for market coverage, investor workflows, and media production.
-          </p>
+        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
+            <h1 className="mt-2 text-3xl font-semibold text-foreground md:text-5xl">System Health</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Live availability across AI, data pipeline, decision engine, and platform services.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/docs/deployment-architecture"
+              className="rounded-xl border border-border/60 bg-card/60 px-4 py-2 text-xs text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
+            >
+              Architecture docs →
+            </Link>
+            <Link
+              href="/docs/cto-deployment-review"
+              className="rounded-xl border border-border/60 bg-card/60 px-4 py-2 text-xs text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
+            >
+              CTO review →
+            </Link>
+          </div>
         </header>
 
         {/* Overall status banner */}
@@ -116,16 +156,20 @@ export default async function StatusPage() {
         </div>
 
         {/* Services grid */}
-        <section className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <section className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {services.map((service) => {
             const isOk = service.status === "Operational"
+            const Icon = service.icon
             return (
               <div
                 key={service.name}
                 className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/75 px-5 py-4"
               >
                 <div className="flex items-center gap-3">
-                  <span className={`h-2 w-2 flex-shrink-0 rounded-full ${isOk ? "bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" : "bg-amber-400"}`} />
+                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-card border border-border/60">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${isOk ? "bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" : "bg-amber-400"}`} />
+                  </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">{service.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{service.detail}</p>
@@ -164,6 +208,27 @@ export default async function StatusPage() {
                 <p className={`mt-2 text-2xl font-semibold tabular-nums ${item.color}`}>{item.value}</p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* SLO targets */}
+        <section className="mb-8 max-w-3xl">
+          <div className="mb-4 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Service level objectives</h2>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-border/60">
+            <div className="divide-y divide-border/40">
+              {sloTargets.map((slo) => (
+                <div key={slo.metric} className="flex items-center justify-between bg-card/30 px-5 py-3.5">
+                  <p className="text-sm text-muted-foreground">{slo.metric}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-muted-foreground/50">{slo.period}</span>
+                    <span className="text-sm font-semibold text-emerald-300 tabular-nums">{slo.target}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

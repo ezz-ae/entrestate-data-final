@@ -72,8 +72,8 @@ export default function LoginPage() {
             <p className="text-sm text-primary-foreground/60 mt-1">Areas Tracked</p>
           </div>
           <div>
-            <p className="text-3xl font-serif text-primary-foreground">1,400+</p>
-            <p className="text-sm text-primary-foreground/60 mt-1">Projects</p>
+            <p className="text-3xl font-serif text-primary-foreground">7,000+</p>
+            <p className="text-sm text-primary-foreground/60 mt-1">Projects Scored</p>
           </div>
         </div>
       </div>

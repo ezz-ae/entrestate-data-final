@@ -1,4 +1,5 @@
 import "server-only"
+import { createHash } from "node:crypto"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
@@ -163,7 +164,20 @@ export function getAnonymousCopilotAccountKey(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
   const realIp = request.headers.get("x-real-ip")?.trim()
   const ip = forwardedFor || realIp || "unknown"
-  return `anon:${ip}`
+
+  if (ip !== "unknown") {
+    return `anon:ip:${ip}`
+  }
+
+  const userAgent = request.headers.get("user-agent")?.trim() || "unknown"
+  const language = request.headers.get("accept-language")?.split(",")[0]?.trim() || "unknown"
+  const host = request.headers.get("host")?.trim() || "unknown"
+  const fingerprint = createHash("sha256")
+    .update(`${userAgent}|${language}|${host}`)
+    .digest("hex")
+    .slice(0, 24)
+
+  return `anon:fingerprint:${fingerprint}`
 }
 
 async function ensureUsageTables() {

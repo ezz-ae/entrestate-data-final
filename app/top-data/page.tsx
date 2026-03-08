@@ -93,13 +93,15 @@ export default async function TopDataPage() {
         </header>
 
         <section className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card/70 px-4 py-2.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" />
-            <span className="text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">{availableSections.length}</span>
-              /{REQUIRED_SECTIONS.length} sections loaded
-            </span>
-          </div>
+          {availableSections.length > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card/70 px-4 py-2.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]" />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{availableSections.length}</span>
+                /{REQUIRED_SECTIONS.length} sections loaded
+              </span>
+            </div>
+          )}
           <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-2.5 text-xs text-muted-foreground">
             Start with <span className="font-medium text-foreground">Market Pulse</span> → scan{" "}
             <span className="font-medium text-foreground">Timing</span> &{" "}
@@ -112,6 +114,15 @@ export default async function TopDataPage() {
             </div>
           ) : null}
         </section>
+
+        {availableSections.length === 0 && (
+          <div className="mb-8 rounded-2xl border border-dashed border-border/60 bg-card/40 px-6 py-16 text-center">
+            <p className="text-sm font-medium text-foreground">Market intelligence is refreshing</p>
+            <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+              The data pipeline is processing the latest UAE market signals. Sections will appear once the current cycle completes — typically within a few hours.
+            </p>
+          </div>
+        )}
 
         <section className="relative grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(900px_circle_at_50%_-10%,rgba(245,158,11,0.18),transparent_58%)]" />

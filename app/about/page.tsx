@@ -29,7 +29,7 @@ const principles = [
 const stats = [
   { value: "8", label: "Markets" },
   { value: "200+", label: "Areas Tracked" },
-  { value: "1,400+", label: "Projects" },
+  { value: "7,000+", label: "Projects Scored" },
   { value: "48", label: "Published Reports" },
 ]
 

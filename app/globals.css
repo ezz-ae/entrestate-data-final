@@ -263,6 +263,15 @@
   }
 }
 
+/* Scrollbar utilities */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Animations */
 @keyframes fade-in-up {
   0% {
