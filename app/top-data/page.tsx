@@ -18,6 +18,21 @@ const REQUIRED_SECTIONS = [
   "trust-bar",
 ] as const
 
+type RequiredSection = (typeof REQUIRED_SECTIONS)[number]
+
+const SECTION_ALIASES: Record<string, RequiredSection> = {
+  market_pulse: "market-pulse",
+  timing_signals: "timing-signals",
+  stress_grades: "stress-grades",
+  outcome_intents: "outcome-intents",
+  top_projects: "top-projects",
+  area_intelligence: "area-intelligence",
+  developer_reliability: "developer-reliability",
+  golden_visa: "golden-visa",
+  trust_bar: "trust-bar",
+  confidence: "trust-bar",
+}
+
 const SECTION_COPY: Record<
   (typeof REQUIRED_SECTIONS)[number],
   { title: string; subtitle: string }
@@ -73,11 +88,30 @@ function sectionLayoutClass(section: (typeof REQUIRED_SECTIONS)[number]) {
   return "xl:col-span-1"
 }
 
+function normalizeSectionKey(value: string | null | undefined) {
+  if (!value) return ""
+  return value.trim().toLowerCase().replace(/[_\s]+/g, "-")
+}
+
+function toRequiredSection(value: string | null | undefined): RequiredSection | null {
+  const normalized = normalizeSectionKey(value)
+  if (!normalized) return null
+
+  const aliased = SECTION_ALIASES[normalized] ?? normalized
+  return (REQUIRED_SECTIONS as readonly string[]).includes(aliased) ? (aliased as RequiredSection) : null
+}
+
 export default async function TopDataPage() {
   const topData = await getTopDataRows()
 
-  const rowsBySection = new Map(topData.sections.map((row) => [row.section, row]))
-  const availableSections = topData.sections.filter((row) => REQUIRED_SECTIONS.includes(row.section as (typeof REQUIRED_SECTIONS)[number]))
+  const rowsBySection = new Map<RequiredSection, (typeof topData.sections)[number]>()
+  for (const row of topData.sections) {
+    const sectionKey = toRequiredSection(row.id) ?? toRequiredSection(row.section)
+    if (!sectionKey || rowsBySection.has(sectionKey)) continue
+    rowsBySection.set(sectionKey, row)
+  }
+
+  const availableSections = REQUIRED_SECTIONS.filter((sectionKey) => rowsBySection.has(sectionKey))
   const missingSections = REQUIRED_SECTIONS.filter((key) => !rowsBySection.has(key))
 
   return (

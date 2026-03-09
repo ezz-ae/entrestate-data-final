@@ -545,28 +545,28 @@ export async function POST(request: Request) {
       }),
       mcp_query: tool({
         description:
-          "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, and aggregations.",
+          "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, aggregations. Only SELECT/WITH allowed, max 100 rows.",
         inputSchema: mcpQueryInputSchema,
         execute: async (input: McpQueryInput) => withGuardrails(await mcpQuery(input)),
       }),
       mcp_describe_table: tool({
-        description: "Inspect a table schema: column names, data types, and row count.",
+        description: "Inspect a table's schema: column names, types, row count. Use before querying unfamiliar tables.",
         inputSchema: mcpDescribeTableInputSchema,
         execute: async (input: McpDescribeTableInput) => await mcpDescribeTable(input.table_name),
       }),
       mcp_sample_data: tool({
-        description: "Preview sample rows from any table (1-20 rows).",
+        description: "Preview sample rows from any table (1-20 rows). Use to understand data format before writing queries.",
         inputSchema: mcpSampleDataInputSchema,
         execute: async (input: McpSampleDataInput) => await mcpSampleData(input.table_name, input.limit),
       }),
       mcp_cross_reference: tool({
         description:
-          "Run pre-built analytics joins: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report.",
+          "Run pre-built cross-reference analytics: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report. Optionally filter by area name.",
         inputSchema: mcpCrossReferenceInputSchema,
         execute: async (input: McpCrossReferenceInput) => withGuardrails(await mcpCrossReference(input)),
       }),
       mcp_trigger_scraper: tool({
-        description: "Trigger a live data scraper. Supports arvo_dld for DLD transactions.",
+        description: "Trigger a live data scraper. Currently supports: arvo_dld (DLD transactions from arvo.co API).",
         inputSchema: mcpTriggerScraperInputSchema,
         execute: async (input: McpTriggerScraperInput) => await mcpTriggerScraper(input.source),
       }),
