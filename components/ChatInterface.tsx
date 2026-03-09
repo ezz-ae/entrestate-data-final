@@ -1,15 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { useCopilot } from "@/components/copilot-provider"
 import {
   BarChart3,
+  Bell,
   BookmarkPlus,
   Building2,
   CheckCircle2,
   FileText,
   Gauge,
+  Layers,
   Loader2,
   Radar,
   Scale,
@@ -630,6 +632,10 @@ export function ChatInterface({
   const [opexPct, setOpexPct] = useState(18)
   const [slashActiveIndex, setSlashActiveIndex] = useState(0)
   const [canvasOpen, setCanvasOpen] = useState(false)
+  const [activeCanvasTab, setActiveCanvasTab] = useState<"overview" | "projects" | "simulator" | "transactions" | "export">("overview")
+  const prevComparisonCount = useRef(0)
+  const prevDldCount = useRef(0)
+  const prevSelectedProject = useRef("")
 
   const { messages, sendMessage, status, error, stop } = useCopilot()
 
@@ -790,6 +796,28 @@ export function ChatInterface({
       return exists ? current : comparisonRows[0].label
     })
   }, [comparisonRows])
+
+  // Auto-switch canvas tab when new data arrives
+  useEffect(() => {
+    if (comparisonRows.length > prevComparisonCount.current) {
+      setActiveCanvasTab("projects")
+    }
+    prevComparisonCount.current = comparisonRows.length
+  }, [comparisonRows.length])
+
+  useEffect(() => {
+    if (dldNotifications.length > prevDldCount.current) {
+      setActiveCanvasTab("transactions")
+    }
+    prevDldCount.current = dldNotifications.length
+  }, [dldNotifications.length])
+
+  useEffect(() => {
+    if (selectedProject && selectedProject !== prevSelectedProject.current) {
+      setActiveCanvasTab("simulator")
+    }
+    prevSelectedProject.current = selectedProject
+  }, [selectedProject])
 
   const selectedRow = useMemo(
     () => comparisonRows.find((row) => row.label === selectedProject) ?? null,
@@ -1322,7 +1350,7 @@ export function ChatInterface({
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
       <section className="overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5">
 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2.5">
@@ -1345,9 +1373,9 @@ export function ChatInterface({
               variant="outline"
               size="sm"
               onClick={() => setCanvasOpen((current) => !current)}
-              className="h-7 px-2.5 text-xs"
+              className="h-7 px-2.5 text-xs lg:hidden"
             >
-              {canvasOpen ? "Hide workspace" : "Open workspace"}
+              {canvasOpen ? "Hide canvas" : "Show canvas"}
             </Button>
           </div>
         </div>
@@ -1381,7 +1409,7 @@ export function ChatInterface({
           ))}
         </div>
 
-        <div id="chat-container" className="relative z-10 h-[58vh] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/55 p-3 backdrop-blur-sm md:h-[60vh]">
+        <div id="chat-container" className="relative z-10 h-[58vh] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/55 p-3 backdrop-blur-sm md:h-[60vh] lg:h-[65vh]">
           {(messages as any[]).length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/60 bg-background/75 p-4 text-sm text-muted-foreground">
               Ask for anything real estate. Compare projects, simulate scenarios, draft reports, and run live intelligence from one chat.
@@ -1491,7 +1519,7 @@ export function ChatInterface({
         {error && !isLimitError ? <p className="mt-3 text-sm text-red-500">{error.message}</p> : null}
       </section>
 
-      <aside className={`overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5 ${canvasOpen ? "block" : "hidden"}`}>
+      <aside className={`overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5 lg:sticky lg:top-28 lg:max-h-[calc(100vh-160px)] lg:overflow-y-auto lg:block ${canvasOpen ? "block" : "hidden"}`}>
 
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
