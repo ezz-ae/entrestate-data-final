@@ -165,6 +165,18 @@ function messageText(message: any): string {
   return ""
 }
 
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
+}
+
+function displayMessageText(message: any): string {
+  const text = messageText(message)
+  if (message?.role === "assistant") {
+    return stripThinkTags(text)
+  }
+  return text
+}
+
 function toRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   return value as Record<string, unknown>
@@ -760,7 +772,7 @@ export function ChatInterface({
 
   const latestAssistantText = useMemo(() => {
     if (!latestAssistantMessage) return ""
-    return messageText(latestAssistantMessage)
+    return displayMessageText(latestAssistantMessage)
   }, [latestAssistantMessage])
 
   const hasConversation = useMemo(() => {
@@ -1423,7 +1435,7 @@ export function ChatInterface({
             >
               {message.role === "user" ? (
                 <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/85 px-4 py-3 text-sm text-primary-foreground shadow-[0_12px_24px_-14px_rgba(37,99,235,0.5)]">
-                  {messageText(message) || "..."}
+                  {displayMessageText(message) || "..."}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-background/95 via-card/90 to-background/85 px-4 py-3.5 text-sm text-foreground shadow-[0_16px_28px_-18px_rgba(56,189,248,0.3)]">
@@ -1431,7 +1443,7 @@ export function ChatInterface({
                     <Sparkles className="h-2.5 w-2.5" />
                     AI
                   </p>
-                  <ChatMarkdown text={messageText(message) || "Running analysis..."} />
+                  <ChatMarkdown text={displayMessageText(message) || "Running analysis..."} />
                 </div>
               )}
             </div>
