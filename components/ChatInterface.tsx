@@ -747,7 +747,7 @@ export function ChatInterface({
     usageError.toLowerCase().includes("cool") ||
     usageError.toLowerCase().includes("limit")
   const isBusy = status === "submitted" || status === "streaming"
-  const submitBlocked = input.trim().length === 0 || chatBlocked
+  const submitBlocked = input.trim().length === 0 || chatBlocked || isBusy
   const usageStatusLabel = useMemo(() => {
     if (limit === null) return "Unlimited · ⌘↵ to send"
     if (chatBlocked) {
@@ -963,8 +963,8 @@ export function ChatInterface({
     if (!cleanedPrompt) return false
 
     if (isBusy) {
-      stop()
-      await new Promise((resolve) => window.setTimeout(resolve, 80))
+      setLimitMessage("Please wait for the current analysis to finish.")
+      return false
     }
 
     if (chatBlocked) {
@@ -1401,6 +1401,7 @@ export function ChatInterface({
                 type="button"
                 onClick={() => void sendPrompt(command.prompt)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={submitBlocked}
               >
                 <Icon className="h-3 w-3" />
                 {command.label}
@@ -1414,6 +1415,7 @@ export function ChatInterface({
               type="button"
               onClick={() => void sendPrompt(suggestion)}
               className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-card/60 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/35 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={submitBlocked}
             >
               <WandSparkles className="h-3 w-3" />
               <span className="max-w-48 truncate">{suggestion}</span>
