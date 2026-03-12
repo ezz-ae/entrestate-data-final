@@ -19,17 +19,16 @@ import {
   GenerateInvestorMemoInput,
   MemoSection,
   PriceRealityCheckInput,
-  ScenarioStressTestInput,
 } from "@/lib/copilot/tools"
 import { getEnterpriseStrategicContext, getStrategicNarrative } from "@/lib/ai/enterprise/service"
 
 const STATEMENT_TIMEOUT_MS = 8000
-const STRESS_GRADE_ORDER = ["A", "B", "C", "D"] as const
+const STRESS_GRADE_ORDER = ["A", "B", "C", "D", "E"] as const
 const DEAL_SORT_COLUMNS = {
-  engine_god_metric: "engine_god_metric",
-  l1_canonical_price: "l1_canonical_price",
-  l1_canonical_yield: "l1_canonical_yield",
-  l2_developer_reliability: "l2_developer_reliability",
+  investor_score_v1: "investor_score_v1",
+  price_from: "price_from",
+  rental_yield: "rental_yield",
+  developer_reliability_score: "developer_reliability_score",
 } as const
 
 const UAE_CITIES = [
@@ -79,11 +78,11 @@ function buildQualityClauses(options: QualityOptions = {}): Prisma.Sql[] {
   const clauses: Prisma.Sql[] = []
 
   if (options.requirePrice) {
-    clauses.push(Prisma.sql`COALESCE(l1_canonical_price, 0) > 0`)
+    clauses.push(Prisma.sql`COALESCE(price_from, 0) > 0`)
   }
 
   if (options.requireStress) {
-    clauses.push(Prisma.sql`l2_stress_test_grade IS NOT NULL`)
+    clauses.push(Prisma.sql`stress_grade_v1 IS NOT NULL`)
   }
 
   if (options.requireArea) {
@@ -95,7 +94,7 @@ function buildQualityClauses(options: QualityOptions = {}): Prisma.Sql[] {
   }
 
   if (options.requireConfidence) {
-    clauses.push(Prisma.sql`COALESCE(l1_confidence, 'LOW') IN ('MEDIUM', 'HIGH')`)
+    clauses.push(Prisma.sql`COALESCE(price_confidence, 'LOW') IN ('MEDIUM', 'HIGH')`)
   }
 
   if (options.onlyUae) {
@@ -151,19 +150,6 @@ function normalizeValue(value: unknown): unknown {
   return value
 }
 
-function toFiniteNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value === "bigint") {
-    const cast = Number(value)
-    return Number.isFinite(cast) ? cast : fallback
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, ""))
-    return Number.isFinite(parsed) ? parsed : fallback
-  }
-  return fallback
-}
-
 function normalizeRows<T extends DbRow>(rows: T[]): T[] {
   return rows.map((row) => normalizeValue(row) as T)
 }
@@ -183,7 +169,7 @@ function buildDealScreenerFilters(filters: DealScreenerInput["filters"]): Prisma
   }
 
   if (typeof filters.budget_max_aed === "number") {
-    clauses.push(Prisma.sql`l1_canonical_price <= ${filters.budget_max_aed}`)
+    clauses.push(Prisma.sql`price_from <= ${filters.budget_max_aed}`)
   }
 
   if (typeof filters.beds_min === "number") {
@@ -211,17 +197,17 @@ function buildDealScreenerFilters(filters: DealScreenerInput["filters"]): Prisma
   }
 
   if (filters.timing_signal) {
-    clauses.push(Prisma.sql`l3_timing_signal = ${filters.timing_signal}`)
+    clauses.push(Prisma.sql`timing_label = ${filters.timing_signal}`)
   }
 
   if (filters.stress_grade_min) {
     const index = STRESS_GRADE_ORDER.indexOf(filters.stress_grade_min)
     const allowedGrades = STRESS_GRADE_ORDER.slice(0, index + 1)
-    clauses.push(Prisma.sql`l2_stress_test_grade IN (${toSqlList([...allowedGrades])})`)
+    clauses.push(Prisma.sql`stress_grade_v1 IN (${toSqlList([...allowedGrades])})`)
   }
 
   if (filters.affordability_tier) {
-    clauses.push(Prisma.sql`LOWER(COALESCE(l2_affordability_tier, '')) = LOWER(${filters.affordability_tier})`)
+    clauses.push(Prisma.sql`LOWER(COALESCE(affordability_tier, '')) = LOWER(${filters.affordability_tier})`)
   }
 
   return clauses
@@ -253,27 +239,23 @@ function buildDealScreenerQuery(input: DealScreenerInput): Prisma.Sql {
       bedrooms_min,
       bedrooms_max,
       COALESCE(bedrooms_min, bedrooms_max) AS beds,
-      l1_canonical_price,
-      l1_canonical_yield,
-      l1_canonical_status,
-      l1_confidence,
-      l1_source_coverage,
-      l2_investment_score,
-      l2_developer_reliability,
-      l2_affordability_tier,
-      l2_stress_test_grade,
-      l2_market_efficiency,
-      l2_goal_alignment,
-      l3_timing_signal,
-      l3_supply_pressure,
-      l3_demand_velocity,
-      l3_price_drift_30d,
-      engine_god_metric,
-      engine_affordability,
-      engine_stress_test,
-      evidence_sources,
-      evidence_exclusions,
-      evidence_assumptions
+      price_from,
+      rental_yield,
+      price_source,
+      price_confidence,
+      investor_score_v1,
+      decision_label_v1,
+      timing_label,
+      stress_grade_v1,
+      yield_label,
+      evidence_label_v1,
+      developer_reliability_score,
+      supply_resilience_score,
+      liquidity_resilience_score,
+      pricing_discipline_score,
+      handover_reliability_score,
+      area_stability_score,
+      payment_plan_score
     FROM ${COPILOT_TABLE_SQL}
     ${whereClause}
     ORDER BY ${sortColumn} DESC NULLS LAST
@@ -307,13 +289,15 @@ export async function executePriceRealityCheck(input: PriceRealityCheckInput): P
   const query = Prisma.sql`
     SELECT
       name,
-      l1_canonical_price,
-      l4_dld_avg_txn_price,
-      l4_portal_price_delta,
-      l1_confidence,
-      l1_source_coverage,
-      evidence_sources,
-      evidence_assumptions
+      price_from,
+      price_source,
+      price_confidence,
+      investor_score_v1,
+      decision_label_v1,
+      timing_label,
+      stress_grade_v1,
+      yield_label,
+      evidence_label_v1
     FROM ${COPILOT_TABLE_SQL}
     WHERE LOWER(name) LIKE LOWER('%' || ${input.project_name} || '%')
       AND ${Prisma.join(qualityClauses, " AND ")}
@@ -344,12 +328,11 @@ export async function executeAreaRiskBrief(input: AreaRiskBriefInput): Promise<T
     SELECT
       COALESCE(final_area, area) AS area,
       COUNT(*)::int AS projects,
-      ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0)) AS avg_price,
-      ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
-      ROUND(AVG(l3_supply_pressure::numeric), 2) AS supply_pressure,
-      ROUND(AVG(engine_god_metric::numeric), 1) AS efficiency,
-      COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_signals,
-      COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_projects
+      ROUND(AVG(price_from) FILTER (WHERE price_from > 0)) AS avg_price,
+      ROUND(AVG(rental_yield::numeric), 1) AS avg_yield,
+      ROUND(AVG(investor_score_v1::numeric), 1) AS avg_score,
+      COUNT(CASE WHEN timing_label IN ('STRONG_BUY', 'BUY') THEN 1 END)::int AS buy_signals,
+      COUNT(CASE WHEN stress_grade_v1 IN ('A', 'B') THEN 1 END)::int AS safe_projects
     FROM ${COPILOT_TABLE_SQL}
     WHERE LOWER(COALESCE(final_area, area)) LIKE LOWER('%' || ${input.area_name} || '%')
       AND ${Prisma.join(qualityClauses, " AND ")}
@@ -369,6 +352,26 @@ export async function executeAreaRiskBrief(input: AreaRiskBriefInput): Promise<T
 export async function executeDeveloperDueDiligence(
   input: DeveloperDueDiligenceInput,
 ): Promise<ToolEnvelope<DbRow>> {
+  const registryRows = await runQuery(
+    Prisma.sql`
+      SELECT name, tier, project_count
+      FROM developer_registry
+      WHERE name ILIKE '%' || ${input.developer_name} || '%'
+      ORDER BY CASE WHEN name ILIKE ${input.developer_name} THEN 0 ELSE 1 END
+      LIMIT 1
+    `,
+  )
+
+  if (registryRows.length === 0) {
+    return {
+      source: "developer_due_diligence",
+      data_as_of: nowIso(),
+      no_results: true,
+      rows: [],
+    }
+  }
+
+  const developerName = registryRows[0].name
   const qualityClauses = buildQualityClauses({
     requirePrice: true,
     requireStress: true,
@@ -380,28 +383,35 @@ export async function executeDeveloperDueDiligence(
     requireBedroomSanity: true,
   })
 
-  const query = Prisma.sql`
-    SELECT
-      developer,
-      COUNT(*)::int AS projects,
-      ROUND(AVG(l2_developer_reliability::numeric), 1) AS reliability,
-      ROUND(AVG(engine_god_metric::numeric), 1) AS efficiency,
-      COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_projects,
-      ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0)) AS avg_price,
-      array_agg(DISTINCT COALESCE(final_area, area)) AS areas
-    FROM ${COPILOT_TABLE_SQL}
-    WHERE LOWER(developer) LIKE LOWER('%' || ${input.developer_name} || '%')
-      AND ${Prisma.join(qualityClauses, " AND ")}
-    GROUP BY 1
-  `
-  const rows = await runQuery(query)
+  const statsRows = await runQuery(
+    Prisma.sql`
+      SELECT
+        COUNT(*)::int AS projects,
+        ROUND(AVG(developer_reliability_score::numeric), 1) AS reliability,
+        ROUND(AVG(investor_score_v1::numeric), 1) AS avg_score,
+        COUNT(CASE WHEN stress_grade_v1 IN ('A', 'B') THEN 1 END)::int AS safe_projects,
+        ROUND(AVG(price_from) FILTER (WHERE price_from > 0)) AS avg_price,
+        array_agg(DISTINCT COALESCE(final_area, area)) AS areas
+      FROM ${COPILOT_TABLE_SQL}
+      WHERE LOWER(developer) LIKE LOWER('%' || ${developerName} || '%')
+        AND ${Prisma.join(qualityClauses, " AND ")}
+    `,
+  )
+
+  const stats = statsRows[0] ?? {}
 
   return {
     source: "developer_due_diligence",
     data_as_of: nowIso(),
-    count: rows.length,
-    no_results: rows.length === 0,
-    rows,
+    count: 1,
+    rows: [
+      {
+        developer: developerName,
+        tier: registryRows[0].tier,
+        registry_projects: registryRows[0].project_count,
+        ...stats,
+      },
+    ],
   }
 }
 
@@ -420,13 +430,15 @@ async function loadProjectContext(projectName: string): Promise<DbRow | null> {
       name,
       developer,
       COALESCE(final_area, area) AS area,
-      l2_stress_test_grade,
-      engine_stress_test,
-      l3_timing_signal,
-      l1_confidence,
-      l1_source_coverage,
-      evidence_sources,
-      evidence_assumptions
+      stress_score,
+      stress_grade_v1,
+      timing_label,
+      investor_score_v1,
+      decision_label_v1,
+      evidence_label_v1,
+      yield_label,
+      price_confidence,
+      price_source
     FROM ${COPILOT_TABLE_SQL}
     WHERE LOWER(name) LIKE LOWER('%' || ${projectName} || '%')
       AND ${Prisma.join(qualityClauses, " AND ")}
@@ -445,10 +457,10 @@ function formatScalar(value: unknown): string {
 
 function buildStressNarrative(projectContext: DbRow | null): string {
   if (!projectContext) return "Stress test is unavailable because the project was not found."
-  const grade = formatScalar(projectContext.l2_stress_test_grade)
-  const score = formatScalar(projectContext.engine_stress_test)
-  const timing = formatScalar(projectContext.l3_timing_signal)
-  return `Stress profile: grade ${grade}, stress engine score ${score}, timing signal ${timing}.`
+  const grade = formatScalar(projectContext.stress_grade_v1)
+  const score = formatScalar(projectContext.stress_score)
+  const timing = formatScalar(projectContext.timing_label)
+  return `Stress profile: grade ${grade}, stress score ${score}, timing label ${timing}.`
 }
 
 function includesSection(sections: MemoSection[], section: MemoSection) {
@@ -510,10 +522,10 @@ export async function executeGenerateInvestorMemo(
     narrative: {
       price_reality:
         priceReality && priceReality.rows?.[0]
-          ? `Price snapshot for ${formatScalar(priceReality.rows[0].name)}: canonical price ${formatScalar(
-              priceReality.rows[0].l1_canonical_price,
-            )}, DLD average ${formatScalar(priceReality.rows[0].l4_dld_avg_txn_price)}, portal delta ${formatScalar(
-              priceReality.rows[0].l4_portal_price_delta,
+          ? `Price snapshot for ${formatScalar(priceReality.rows[0].name)}: price ${formatScalar(
+              priceReality.rows[0].price_from,
+            )}, source ${formatScalar(priceReality.rows[0].price_source)}, confidence ${formatScalar(
+              priceReality.rows[0].price_confidence,
             )}.`
           : "Price reality section returned no matching project.",
       area_risk:
@@ -559,19 +571,22 @@ export async function executeCompareProjects(input: CompareProjectsInput): Promi
       name,
       developer,
       COALESCE(final_area, area) AS area,
-      l1_canonical_price,
-      l1_canonical_yield,
-      l1_confidence,
-      l2_stress_test_grade,
-      engine_god_metric,
-      l3_timing_signal
+      price_from,
+      rental_yield,
+      price_confidence,
+      stress_grade_v1,
+      investor_score_v1,
+      timing_label,
+      decision_label_v1,
+      evidence_label_v1,
+      yield_label
     FROM ${COPILOT_TABLE_SQL}
     WHERE (${Prisma.join(
       names.map((n) => Prisma.sql`LOWER(name) LIKE LOWER(${n})`),
       " OR ",
     )})
       AND ${Prisma.join(qualityClauses, " AND ")}
-    ORDER BY engine_god_metric DESC
+    ORDER BY investor_score_v1 DESC
     LIMIT 10
   `
 
@@ -644,7 +659,7 @@ export async function executeGenerateDecisionObject(input: GenerateDecisionObjec
     scope: { projects: [String(projectContext.name)] },
     time_grain: "lifecycle" as const,
     time_range: { mode: "relative" as const, last: 1, unit: "years" as const },
-    signals: ["l1_canonical_price", "l1_canonical_yield", "l2_stress_test_grade"],
+    signals: ["price_from", "rental_yield", "stress_grade_v1"],
     filters: [{ field: "name", op: "eq" as const, value: String(projectContext.name) }],
   }
 
@@ -685,23 +700,23 @@ export async function executeGenerateStrategicReport(input: GenerateStrategicRep
     runQuery(Prisma.sql`
       SELECT
         COUNT(*)::int AS total_projects,
-        ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0)) AS avg_price,
-        ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
-        ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score,
-        COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_count,
-        COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_count
+        ROUND(AVG(price_from) FILTER (WHERE price_from > 0)) AS avg_price,
+        ROUND(AVG(rental_yield::numeric), 1) AS avg_yield,
+        ROUND(AVG(investor_score_v1::numeric), 1) AS avg_score,
+        COUNT(CASE WHEN timing_label IN ('STRONG_BUY', 'BUY') THEN 1 END)::int AS buy_count,
+        COUNT(CASE WHEN stress_grade_v1 IN ('A', 'B') THEN 1 END)::int AS safe_count
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+      WHERE price_from > 0 AND price_confidence IN ('MEDIUM', 'HIGH')
         ${focusFilter}
     `),
     runQuery(Prisma.sql`
       SELECT
         COALESCE(final_area, area) AS area,
         COUNT(*)::int AS projects,
-        ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
-        ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score
+        ROUND(AVG(rental_yield::numeric), 1) AS avg_yield,
+        ROUND(AVG(investor_score_v1::numeric), 1) AS avg_score
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+      WHERE price_from > 0 AND price_confidence IN ('MEDIUM', 'HIGH')
         ${focusFilter}
       GROUP BY 1
       HAVING COUNT(*) >= 3
@@ -710,10 +725,10 @@ export async function executeGenerateStrategicReport(input: GenerateStrategicRep
     `),
     runQuery(Prisma.sql`
       SELECT
-        l2_stress_test_grade AS grade,
+        stress_grade_v1 AS grade,
         COUNT(*)::int AS count
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l2_stress_test_grade IS NOT NULL
+      WHERE price_from > 0 AND stress_grade_v1 IS NOT NULL
         ${focusFilter}
       GROUP BY 1
       ORDER BY count DESC
@@ -745,31 +760,31 @@ export async function executeGenerateInvestmentRoadmap(input: GenerateInvestment
   // Query real market data for budget-appropriate projects
   const [readyAssets, pipelineAssets, topYieldAreas] = await Promise.all([
     runQuery(Prisma.sql`
-      SELECT name, COALESCE(final_area, area) AS area, l1_canonical_price, l1_canonical_yield,
-             l2_stress_test_grade, engine_god_metric
+      SELECT name, COALESCE(final_area, area) AS area, price_from, rental_yield,
+             stress_grade_v1, investor_score_v1
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l1_canonical_price <= ${capital * 0.5}
-        AND l1_confidence IN ('MEDIUM', 'HIGH')
-        AND l3_timing_signal = 'BUY'
-      ORDER BY ${isYieldFocused ? Prisma.sql`l1_canonical_yield` : Prisma.sql`engine_god_metric`} DESC NULLS LAST
+      WHERE price_from > 0 AND price_from <= ${capital * 0.5}
+        AND price_confidence IN ('MEDIUM', 'HIGH')
+        AND timing_label IN ('STRONG_BUY', 'BUY')
+      ORDER BY ${isYieldFocused ? Prisma.sql`rental_yield` : Prisma.sql`investor_score_v1`} DESC NULLS LAST
       LIMIT 5
     `),
     runQuery(Prisma.sql`
-      SELECT name, COALESCE(final_area, area) AS area, l1_canonical_price, l1_canonical_yield,
-             l2_stress_test_grade, engine_god_metric
+      SELECT name, COALESCE(final_area, area) AS area, price_from, rental_yield,
+             stress_grade_v1, investor_score_v1
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l1_canonical_price <= ${capital * 0.4}
-        AND l1_confidence IN ('MEDIUM', 'HIGH')
-        AND l2_stress_test_grade IN ('A', 'B')
-      ORDER BY l1_canonical_yield DESC NULLS LAST
+      WHERE price_from > 0 AND price_from <= ${capital * 0.4}
+        AND price_confidence IN ('MEDIUM', 'HIGH')
+        AND stress_grade_v1 IN ('A', 'B')
+      ORDER BY rental_yield DESC NULLS LAST
       LIMIT 5
     `),
     runQuery(Prisma.sql`
       SELECT COALESCE(final_area, area) AS area,
-             ROUND(AVG(l1_canonical_yield::numeric), 1) AS avg_yield,
+             ROUND(AVG(rental_yield::numeric), 1) AS avg_yield,
              COUNT(*)::int AS projects
       FROM ${COPILOT_TABLE_SQL}
-      WHERE l1_canonical_price > 0 AND l1_confidence IN ('MEDIUM', 'HIGH')
+      WHERE price_from > 0 AND price_confidence IN ('MEDIUM', 'HIGH')
       GROUP BY 1
       HAVING COUNT(*) >= 3
       ORDER BY avg_yield DESC NULLS LAST
@@ -804,15 +819,15 @@ export async function executeMonitorMarketSegments(input: MonitorMarketSegmentsI
   const areaMetrics = await runQuery(Prisma.sql`
     SELECT
       COALESCE(final_area, area) AS area,
-      ROUND(AVG(l1_canonical_yield::numeric), 2) AS current_avg_yield,
+      ROUND(AVG(rental_yield::numeric), 2) AS current_avg_yield,
       COUNT(*)::int AS projects,
-      COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_signals,
-      COUNT(CASE WHEN l2_stress_test_grade IN ('A', 'B') THEN 1 END)::int AS safe_count,
-      ROUND(AVG(engine_god_metric::numeric), 1) AS avg_score
+      COUNT(CASE WHEN timing_label IN ('STRONG_BUY', 'BUY') THEN 1 END)::int AS buy_signals,
+      COUNT(CASE WHEN stress_grade_v1 IN ('A', 'B') THEN 1 END)::int AS safe_count,
+      ROUND(AVG(investor_score_v1::numeric), 1) AS avg_score
     FROM ${COPILOT_TABLE_SQL}
     WHERE LOWER(COALESCE(final_area, area)) IN (${Prisma.join(input.areas.map(a => Prisma.sql`LOWER(${a})`), ", ")})
-      AND l1_canonical_price > 0
-      AND l1_confidence IN ('MEDIUM', 'HIGH')
+      AND price_from > 0
+      AND price_confidence IN ('MEDIUM', 'HIGH')
     GROUP BY 1
   `)
 
