@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { hasTierAccess } from '@/lib/tier-access';
 
 export async function GET(req: NextRequest) {
   try {
+    if (!await hasTierAccess(req, "institutional")) {
+      return NextResponse.json({ error: "Institutional access required for Agent Builder" }, { status: 403 });
+    }
     const automations = await prisma.agentDefinition.findMany({
       select: {
         id: true,

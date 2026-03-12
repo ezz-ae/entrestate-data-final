@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDataset } from "@/data-scientist/lib/dataset-store"
 import { buildDashboardSummary } from "@/data-scientist/lib/dashboard-summary"
+import { hasTierAccess } from "@/lib/tier-access"
 
 type ChatResponse = {
   reply: string
@@ -26,6 +27,9 @@ function toNumber(value: unknown): number | null {
 
 export async function POST(request: Request) {
   try {
+    if (!await hasTierAccess(request, "team")) {
+      return NextResponse.json({ error: "Team tier required for AI Scientist" }, { status: 403 })
+    }
     const body = await request.json()
     const { datasetId, message } = body as { datasetId?: string; message?: string }
 

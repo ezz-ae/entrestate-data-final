@@ -105,9 +105,6 @@ export default async function DevelopersPage({ searchParams }: { searchParams: P
             </div>
           )}
         </header>
-            </p>
-          )}
-        </header>
 
         {/* Metric cards */}
         <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
