@@ -88,42 +88,48 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
       <div className="mx-auto max-w-[1400px] px-6 pb-20 pt-28 md:pt-36">
 
         {/* Header */}
-        <header className="mb-10 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+        <header className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-              Project Inventory
-            </p>
-            <h1 className="mt-2 font-serif text-3xl font-medium text-foreground md:text-4xl">
-              UAE Project Intelligence
+            <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/5 rounded-full border border-primary/10">
+              <Building2 className="w-3 h-3" />
+              Live Project Feed
+            </div>
+            <h1 className="text-4xl md:text-6xl font-serif font-bold text-foreground leading-tight tracking-tight">
+              Project <span className="text-muted-foreground/40 italic">Intelligence</span>
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground max-w-xl">
-              {result.total.toLocaleString()} projects — each scored for pricing, market timing, stress resilience, and data confidence.
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl font-medium leading-relaxed">
+              {result.total.toLocaleString()} active UAE projects — scored for market timing, stress resilience, and verified data confidence.
             </p>
           </div>
           {freshnessLabel && (
-            <p className="text-[11px] text-muted-foreground/50 md:text-right">
-              Data as of {freshnessLabel}
-            </p>
+            <div className="flex flex-col md:items-end">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">Data Freshness</span>
+              <p className="text-xs font-bold text-foreground bg-secondary/50 px-3 py-1 rounded-lg border border-border/40">
+                {freshnessLabel}
+              </p>
+            </div>
           )}
         </header>
 
         {/* Metric cards */}
-        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mb-12 grid grid-cols-2 gap-4 md:grid-cols-4">
           {[
-            { label: "Total Projects", value: result.total.toLocaleString(), sub: hasFilters ? "Matching current filters" : "Active UAE inventory", icon: BarChart3, color: "text-primary" },
-            { label: "BUY Signals (this page)", value: `${buyCount} / ${projects.length}`, sub: `${projects.length > 0 ? ((buyCount / projects.length) * 100).toFixed(0) : 0}% of page results`, icon: Zap, color: "text-emerald-500" },
-            { label: "Avg Price", value: formatAed(avgPrice), sub: "Across page results", icon: TrendingUp, color: "text-sky-500" },
-            { label: "Avg Gross Yield", value: avgYield !== null ? `${avgYield.toFixed(1)}%` : "—", sub: "Across page results", icon: ShieldCheck, color: "text-violet-500" },
+            { label: "Inventory Depth", value: result.total.toLocaleString(), sub: hasFilters ? "Filtered Results" : "Total UAE Active", icon: BarChart3, color: "text-primary", bg: "bg-primary/5" },
+            { label: "Active BUY Signals", value: `${buyCount} / ${projects.length}`, sub: "Page Opportunity density", icon: Zap, color: "text-emerald-500", bg: "bg-emerald-500/5" },
+            { label: "Market Price L1", value: formatAed(avgPrice), sub: "Derived mean benchmark", icon: TrendingUp, color: "text-sky-500", bg: "bg-sky-500/5" },
+            { label: "Strategic Yield", value: avgYield !== null ? `${avgYield.toFixed(1)}%` : "—", sub: "Annualized gross mean", icon: ShieldCheck, color: "text-violet-500", bg: "bg-violet-500/5" },
           ].map((card) => {
             const Icon = card.icon
             return (
-              <div key={card.label} className="rounded-2xl border border-border bg-card px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 ${card.color}`} />
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{card.label}</p>
+              <div key={card.label} className="group rounded-[2rem] border border-border/60 bg-card/50 p-6 backdrop-blur-sm transition-all hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-2 rounded-xl ${card.bg}`}>
+                    <Icon className={`h-4 w-4 ${card.color}`} />
+                  </div>
                 </div>
-                <p className={`mt-2 text-xl font-bold tabular-nums ${card.color}`}>{card.value}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">{card.sub}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60 mb-2">{card.label}</p>
+                <p className="text-2xl font-serif font-bold tabular-nums text-foreground">{card.value}</p>
+                <p className="mt-1 text-[10px] font-medium text-muted-foreground opacity-60 uppercase tracking-wider">{card.sub}</p>
               </div>
             )
           })}

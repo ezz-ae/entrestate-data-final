@@ -83,21 +83,28 @@ export default async function DevelopersPage({ searchParams }: { searchParams: P
       <div className="mx-auto max-w-[1400px] px-6 pb-20 pt-28 md:pt-36">
 
         {/* Header */}
-        <header className="mb-10 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+        <header className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-              Developer Intelligence
-            </p>
-            <h1 className="mt-2 font-serif text-3xl font-medium text-foreground md:text-4xl">
-              Developer Reliability Index
+            <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/5 rounded-full border border-primary/10">
+              <Users2 className="w-3 h-3" />
+              Counterparty Audit
+            </div>
+            <h1 className="text-4xl md:text-6xl font-serif font-bold text-foreground leading-tight tracking-tight">
+              Developer <span className="text-muted-foreground/40 italic">Reliability</span>
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground max-w-xl">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl font-medium leading-relaxed">
               {developers.length.toLocaleString()} active UAE developers scored for delivery consistency, stress-grade distribution, and historical execution quality.
             </p>
           </div>
           {freshnessLabel && (
-            <p className="text-[11px] text-muted-foreground/50 md:text-right">
-              Data as of {freshnessLabel}
+            <div className="flex flex-col md:items-end">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">Audit Freshness</span>
+              <p className="text-xs font-bold text-foreground bg-secondary/50 px-3 py-1 rounded-lg border border-border/40">
+                {freshnessLabel}
+              </p>
+            </div>
+          )}
+        </header>
             </p>
           )}
         </header>

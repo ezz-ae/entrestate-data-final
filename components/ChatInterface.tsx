@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { useCopilot } from "@/components/copilot-provider"
+import { motion, AnimatePresence } from "framer-motion"
+import { MarqueePrompts } from "@/components/marketing/marquee-prompts"
 import {
   BarChart3,
   Bell,
@@ -21,6 +23,12 @@ import {
   Sparkles,
   TrendingUp,
   WandSparkles,
+  Activity,
+  ArrowRight,
+  Command,
+  Globe,
+  Paperclip,
+  Zap,
   type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -1219,144 +1227,157 @@ export function ChatInterface({
   }, [reportDraft.reportId, reportDraft.enabledExports])
 
   if (!hasConversation) {
+    const placeholders = [
+      "Ask anything about the real estate market...",
+      "Find 2BR projects under AED 2M in Dubai Marina...",
+      "Compare Emaar vs Damac reliability scores...",
+      "What is the rental yield in Business Bay today?",
+      "Stress test a 3BR villa with 5.5% interest...",
+    ]
+
     return (
-      <div className="mx-auto w-full max-w-3xl">
-
-        {/* ── Hero header ── */}
-        <div className="mb-10 text-center">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/8 px-4 py-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_2px_rgba(20,184,166,0.5)]" />
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-primary/80">
-              Decision Intelligence · Live UAE Data
-            </span>
+      <div className="mx-auto w-full max-w-6xl">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="flex flex-col items-center text-center"
+        >
+          {/* ── Badge ── */}
+          <div className="mb-10">
+            <div className="inline-flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-primary bg-primary/5 rounded-full border border-primary/10 backdrop-blur-sm shadow-inner cursor-default group">
+              <Activity className="w-3.5 h-3.5 animate-pulse" />
+              <span className="tracking-wide uppercase">Neural Decision Engine v4.2</span>
+              <div className="h-3 w-px bg-primary/20 mx-1" />
+              <span className="text-primary/60 font-medium italic">Live UAE Data Feed</span>
+            </div>
           </div>
-          <h1 className="font-serif text-3xl font-medium text-foreground md:text-4xl lg:text-5xl">
-            What's your investment<br className="hidden sm:block" /> question?
-          </h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-            Screen properties, compare markets, stress-test cash flows, and generate institutional memos — all from a single prompt.
-          </p>
-        </div>
 
-        {/* ── Capability tiles ── */}
-        <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {capabilityCards.map((card, i) => {
-            const Icon = card.icon
-            const accents = [
-              { border: "hover:border-blue-500/40", bar: "bg-blue-500", icon: "text-blue-400", example: "text-blue-400/60" },
-              { border: "hover:border-violet-500/40", bar: "bg-violet-500", icon: "text-violet-400", example: "text-violet-400/60" },
-              { border: "hover:border-emerald-500/40", bar: "bg-emerald-500", icon: "text-emerald-400", example: "text-emerald-400/60" },
-              { border: "hover:border-amber-500/40", bar: "bg-amber-500", icon: "text-amber-400", example: "text-amber-400/60" },
-            ]
-            const a = accents[i % accents.length]
-            return (
+          {/* ── Headline ── */}
+          <h1 className="font-serif text-4xl md:text-6xl lg:text-7xl font-medium text-foreground leading-[1.1] tracking-tight mb-8">
+            The future of real estate<br />
+            <span className="text-muted-foreground/40 italic">is intelligent.</span>
+          </h1>
+
+          <p className="text-lg md:text-xl text-muted-foreground/80 max-w-2xl mb-12 font-medium leading-relaxed">
+            Screen properties, compare markets, and stress-test cash flows with institutional-grade intelligence.
+          </p>
+
+          {/* ── Marquee ── */}
+          <div className="w-full mb-16 select-none">
+            <MarqueePrompts />
+          </div>
+
+          {/* ── Example Chips ── */}
+          <div className="flex flex-wrap justify-center gap-3 mb-16 max-w-4xl">
+            {capabilityCards.map((card, i) => (
               <button
                 key={card.label}
                 type="button"
-                disabled={chatBlocked}
                 onClick={() => void sendPrompt(card.prompt)}
-                className={`group relative flex items-start gap-4 overflow-hidden rounded-xl border border-border/40 bg-card/50 p-4 text-left transition-all duration-200 hover:bg-card hover:shadow-md hover:shadow-black/10 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${a.border}`}
+                className="px-6 py-3 bg-card/60 backdrop-blur-md hover:bg-card border border-border/40 hover:border-primary/40 rounded-2xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 active:scale-95"
               >
-                {/* Left accent bar */}
-                <div className={`absolute left-0 top-0 h-full w-0.5 ${a.bar} opacity-0 transition-opacity duration-200 group-hover:opacity-60`} />
-
-                <div className={`mt-0.5 shrink-0 rounded-lg border border-border/40 bg-background/60 p-2 ${a.icon}`}>
-                  <Icon className="h-3.5 w-3.5" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground">{card.label}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/70">{card.description}</p>
-                  <p className={`mt-1.5 truncate text-[11px] font-mono opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${a.example}`}>
-                    {card.example}
-                  </p>
-                </div>
+                {card.label}
               </button>
-            )
-          })}
-        </div>
+            ))}
+          </div>
 
-        {/* ── Input ── */}
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm">
-          <form onSubmit={submitMessage}>
-            <div className="relative p-4 pb-2">
-              <Textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => { void onInputKeyDown(event) }}
-                placeholder="Describe your investment goal, budget, or a specific project to analyse…"
-                className="min-h-24 resize-none border-0 bg-transparent p-0 text-sm shadow-none placeholder:text-muted-foreground/40 focus-visible:ring-0 md:text-base"
-                disabled={chatBlocked}
-              />
+          {/* ── Input Shell ── */}
+          <div className="w-full max-w-3xl group mb-20">
+            <div className="relative">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-accent/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200" />
+              
+              <div className="relative bg-card/80 backdrop-blur-xl rounded-2xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_8px_30px_rgba(47,90,166,0.1)] focus-within:border-primary/40 transition-all">
+                <form onSubmit={submitMessage}>
+                  <div className="relative min-h-[120px] p-2">
+                    <Textarea
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      onKeyDown={(event) => { void onInputKeyDown(event) }}
+                      placeholder="Describe your investment goal, budget, or a specific project to analyse…"
+                      className="min-h-[120px] w-full bg-transparent border-0 focus-visible:ring-0 resize-none py-4 px-4 text-base relative z-10 shadow-none placeholder:text-muted-foreground/30"
+                      disabled={chatBlocked}
+                    />
 
-              {isSlashPaletteOpen ? (
-                <div className="absolute bottom-[100%] left-4 right-4 mb-2 rounded-xl border border-border/70 bg-card/98 p-2 shadow-xl backdrop-blur">
-                  {filteredSlashCommands.length === 0 ? (
-                    <p className="px-2 py-1 text-xs text-muted-foreground">No matching commands.</p>
-                  ) : (
-                    filteredSlashCommands.map((command, index) => {
-                      const Icon = command.icon
-                      const isActive = index === slashActiveIndex
-                      return (
-                        <button
-                          key={command.id}
-                          type="button"
-                          onClick={() => void activateSlashCommand(command)}
-                          className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-background"}`}
-                        >
-                          <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-primary" />
-                          <span>
-                            <span className="block text-xs font-semibold text-foreground">{command.title}</span>
-                            <span className="block text-[11px] text-muted-foreground">{command.description}</span>
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              ) : null}
-            </div>
+                    {isSlashPaletteOpen ? (
+                      <div className="absolute bottom-[100%] left-4 right-4 mb-2 rounded-xl border border-border/70 bg-card/98 p-2 shadow-xl backdrop-blur">
+                        {filteredSlashCommands.length === 0 ? (
+                          <p className="px-2 py-1 text-xs text-muted-foreground">No matching commands.</p>
+                        ) : (
+                          filteredSlashCommands.map((command, index) => {
+                            const Icon = command.icon
+                            const isActive = index === slashActiveIndex
+                            return (
+                              <button
+                                key={command.id}
+                                type="button"
+                                onClick={() => void activateSlashCommand(command)}
+                                className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-background"}`}
+                              >
+                                <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                                <span>
+                                  <span className="block text-xs font-semibold text-foreground">{command.title}</span>
+                                  <span className="block text-[11px] text-muted-foreground">{command.description}</span>
+                                </span>
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-border/40 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {slashCommands.slice(0, 4).map((cmd) => (
-                  <button
-                    key={cmd.id}
-                    type="button"
-                    onClick={() => setInput(`/${cmd.id}`)}
-                    className="rounded-full border border-border/50 bg-background/50 px-2.5 py-0.5 text-[11px] font-mono text-muted-foreground/60 transition hover:border-primary/40 hover:text-primary"
-                  >
-                    /{cmd.id}
-                  </button>
-                ))}
-                <span className="hidden text-[10px] text-muted-foreground/30 sm:block">· ⌘↵ to send</span>
+                  <div className="flex items-center justify-between p-3 border-t border-border/10">
+                    <div className="flex gap-1">
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-xl">
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-xl">
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                      <div className="h-8 w-px bg-border/40 mx-1" />
+                      <Button type="button" variant="ghost" size="sm" className="h-9 gap-2 text-muted-foreground hover:text-primary hover:bg-primary/5 font-normal rounded-xl transition-all">
+                        <Zap className="h-4 w-4" />
+                        Deep Scan
+                      </Button>
+                    </div>
+                    
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button 
+                        type="submit"
+                        disabled={submitBlocked}
+                        className="h-10 px-6 rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2"
+                      >
+                        <Send className="h-4 w-4" />
+                        <span className="font-semibold">Analyze</span>
+                      </Button>
+                    </motion.div>
+                  </div>
+                </form>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-3">
-                {limit !== null ? (
-                  <p className="hidden text-xs text-muted-foreground/50 sm:block">
-                    {Math.max(remaining ?? 0, 0)}/{limit} left
-                  </p>
-                ) : null}
-                <Button type="submit" disabled={submitBlocked}>
-                  <Send className="mr-1.5 h-3.5 w-3.5" />
-                  Analyse
-                </Button>
-              </div>
             </div>
-          </form>
-        </div>
+            
+            <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-muted-foreground/40 font-bold uppercase tracking-widest">
+              <span className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                DLD Transacted AED 4.2B Today
+              </span>
+              <span className="w-1 h-1 rounded-full bg-border" />
+              <span>Verified High Confidence Grade A/B only</span>
+            </div>
+          </div>
 
-        {limitMessage ? (
-          <p className="mt-3 text-sm text-amber-500">
-            {limitMessage} <Link href="/pricing" className="underline">Upgrade</Link>
-          </p>
-        ) : null}
-        {isLimitError ? (
-          <p className="mt-3 text-sm text-amber-500">
-            Free window is cooling down. <Link href="/pricing" className="underline">Upgrade for uninterrupted access</Link>
-          </p>
-        ) : null}
-        {error && !isLimitError ? <p className="mt-3 text-sm text-red-400">{error.message}</p> : null}
+          {/* ── Writes, brainstorms... text ── */}
+          <div className="mt-20 max-w-3xl">
+            <h2 className="text-3xl md:text-4xl font-serif text-foreground/90 leading-tight mb-6">
+              Intelligence that <span className="text-primary italic">thinks</span> with you.
+            </h2>
+            <Link href="#" className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline underline-offset-4">
+              Explore the Knowledge Engine
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </motion.div>
       </div>
     )
   }

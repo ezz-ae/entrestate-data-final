@@ -54,13 +54,13 @@ export function resolveGatewayOrGeminiModel(options: { gatewayModel: string; gem
 export function resolveCopilotModel() {
   const geminiKey = ensureGeminiApiKeyEnv()
   if (geminiKey) {
-    return google(normalizeGeminiModel(process.env.COPILOT_GEMINI_MODEL ?? process.env.COPILOT_MODEL, "gemini-2.5-flash"))
+    return google(normalizeGeminiModel(process.env.COPILOT_GEMINI_MODEL ?? process.env.COPILOT_MODEL, "gemini-2.0-flash"))
   }
 
   const gatewayApiKey = getTrimmedEnv("AI_GATEWAY_API_KEY")
   if (gatewayApiKey) {
     const gateway = createGateway({ apiKey: gatewayApiKey })
-    return gateway(process.env.COPILOT_MODEL || "google/gemini-2.5-flash")
+    return gateway(process.env.COPILOT_MODEL || "google/gemini-2.0-flash")
   }
 
   const openAiApiKey = getTrimmedEnv("OPENAI_API_KEY")

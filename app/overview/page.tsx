@@ -42,6 +42,8 @@ const INTENT_META: Record<string, { label: string; description: string }> = {
 
 const NAV_MODULES = [
   { label: "AI Chat", description: "Get scored answers instantly", href: "/chat", icon: Sparkles, accent: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10", border: "border-blue-200/60 dark:border-blue-500/20", tag: "Decision engine" },
+  { label: "AI Scientist", description: "Advanced data modeling & EDA", href: "/ai", icon: Database, accent: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-50 dark:bg-cyan-500/10", border: "border-cyan-200/60 dark:border-cyan-500/20", tag: "Analysis" },
+  { label: "Agent Builder", description: "Design automated execution agents", href: "/automations", icon: Bot, accent: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10", border: "border-rose-200/60 dark:border-rose-500/20", tag: "Automation" },
   { label: "Properties", description: "Every project, fully scored", href: "/properties", icon: Building2, accent: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10", border: "border-indigo-200/60 dark:border-indigo-500/20", tag: "Inventory" },
   { label: "Areas", description: "Yield & supply by location", href: "/areas", icon: MapIcon, accent: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-500/10", border: "border-teal-200/60 dark:border-teal-500/20", tag: "Geography" },
   { label: "Developers", description: "Reliability index & track record", href: "/developers", icon: Users2, accent: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-500/10", border: "border-violet-200/60 dark:border-violet-500/20", tag: "Counterparty" },
@@ -154,15 +156,17 @@ export default async function OverviewPage() {
               </div>
               <h1 className="mt-1.5 text-2xl font-bold text-foreground md:text-3xl tracking-tight">Decision Engine</h1>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${sentiment.color}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${sentiment.dot}`} />
-                {sentiment.label} — {sentiment.sub}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wider ${sentiment.color} backdrop-blur-sm shadow-sm`}>
+                <span className={`h-2 w-2 rounded-full ${sentiment.dot} animate-pulse`} />
+                {sentiment.label}
               </span>
-              <Link href="/chat" className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10">
-                <Sparkles className="h-3 w-3" />
-                Open AI chat
-              </Link>
+              <Button variant="intelligent" size="sm" asChild className="h-9 shadow-lg">
+                <Link href="/chat">
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  Ask AI
+                </Link>
+              </Button>
             </div>
           </div>
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-2.5">
