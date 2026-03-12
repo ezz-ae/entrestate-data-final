@@ -106,6 +106,35 @@ async function ensureTables() {
         CREATE INDEX IF NOT EXISTS idx_billing_webhook_events_subscription_id
         ON billing_webhook_events(subscription_id)
       `)
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS billing_coupons (
+          code TEXT PRIMARY KEY,
+          discount_pct INTEGER NOT NULL,
+          applies_to TEXT NOT NULL DEFAULT 'first_month',
+          max_redemptions INTEGER,
+          redemptions INTEGER NOT NULL DEFAULT 0,
+          active BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `)
+
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO billing_coupons (code, discount_pct, applies_to, max_redemptions, active)
+        VALUES ('try9o', 90, 'first_month', NULL, TRUE)
+        ON CONFLICT (code) DO NOTHING
+      `)
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS billing_coupon_redemptions (
+          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          code TEXT NOT NULL,
+          account_key TEXT NOT NULL,
+          subscription_id TEXT,
+          redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(code, account_key)
+        )
+      `)
     })()
   }
 
@@ -351,4 +380,63 @@ export async function listBillingEventTypesByAccountKey(accountKey: string, limi
 
 export function coerceEntitlementTier(value: string | null | undefined): EntitlementTier {
   return normalizeTier(value)
+}
+
+export type CouponRow = {
+  code: string
+  discount_pct: number
+  applies_to: string
+  max_redemptions: number | null
+  redemptions: number
+  active: boolean
+}
+
+export async function validateCoupon(
+  code: string,
+  accountKey: string,
+): Promise<{ valid: true; coupon: CouponRow } | { valid: false; reason: string }> {
+  const normalizedCode = code.trim().toLowerCase()
+  if (!normalizedCode) return { valid: false, reason: "No coupon code provided." }
+
+  await ensureTables()
+
+  const rows = await prisma.$queryRaw<CouponRow[]>(Prisma.sql`
+    SELECT code, discount_pct, applies_to, max_redemptions, redemptions, active
+    FROM billing_coupons
+    WHERE LOWER(code) = ${normalizedCode}
+    LIMIT 1
+  `)
+
+  const coupon = rows[0]
+  if (!coupon) return { valid: false, reason: "Coupon code not found." }
+  if (!coupon.active) return { valid: false, reason: "This coupon is no longer active." }
+  if (coupon.max_redemptions !== null && coupon.redemptions >= coupon.max_redemptions) {
+    return { valid: false, reason: "This coupon has reached its redemption limit." }
+  }
+
+  const already = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM billing_coupon_redemptions
+    WHERE LOWER(code) = ${normalizedCode} AND account_key = ${accountKey}
+    LIMIT 1
+  `)
+  if (already.length > 0) return { valid: false, reason: "You have already used this coupon." }
+
+  return { valid: true, coupon }
+}
+
+export async function redeemCoupon(code: string, accountKey: string, subscriptionId?: string | null) {
+  const normalizedCode = code.trim().toLowerCase()
+  await ensureTables()
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO billing_coupon_redemptions (code, account_key, subscription_id)
+    VALUES (${normalizedCode}, ${accountKey}, ${subscriptionId ?? null})
+    ON CONFLICT (code, account_key) DO NOTHING
+  `)
+
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE billing_coupons
+    SET redemptions = redemptions + 1
+    WHERE LOWER(code) = ${normalizedCode}
+  `)
 }

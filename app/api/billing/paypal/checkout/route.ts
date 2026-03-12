@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPublicErrorMessage, getRequestId } from "@/lib/api-errors"
 import { getSessionUser } from "@/lib/auth"
-import { getEntitlementByAccountKey, upsertPaypalEntitlement } from "@/lib/billing-entitlements"
+import { getEntitlementByAccountKey, upsertPaypalEntitlement, validateCoupon } from "@/lib/billing-entitlements"
 import { buildPaypalCustomId, createPaypalSubscription, isPaidTier } from "@/lib/paypal"
 
 export const runtime = "nodejs"
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const { searchParams, origin } = new URL(request.url)
     const tier = (searchParams.get("tier") ?? "").toLowerCase()
     const queryAccountKey = searchParams.get("accountKey")?.trim()
+    const couponCode = searchParams.get("coupon")?.trim() ?? null
 
     if (!isPaidTier(tier)) {
       return NextResponse.json(
@@ -32,12 +33,32 @@ export async function GET(request: Request) {
       )
     }
 
+    // Validate coupon if provided
+    let discountPct = 0
+    let validatedCouponCode: string | null = null
+    if (couponCode) {
+      const couponResult = await validateCoupon(couponCode, accountKey)
+      if (couponResult.valid) {
+        discountPct = couponResult.coupon.discount_pct
+        validatedCouponCode = couponResult.coupon.code
+      }
+      // Invalid coupon — silently proceed without discount
+    }
+
     const existingEntitlement = await getEntitlementByAccountKey(accountKey)
     const customId = buildPaypalCustomId({ tier, accountKey })
-    const returnUrl = `${origin}/api/billing/paypal/return?tier=${tier}&accountKey=${encodeURIComponent(accountKey)}`
+    const couponParam = validatedCouponCode ? `&coupon=${encodeURIComponent(validatedCouponCode)}` : ""
+    const returnUrl = `${origin}/api/billing/paypal/return?tier=${tier}&accountKey=${encodeURIComponent(accountKey)}${couponParam}`
     const cancelUrl = `${origin}/pricing?billing=cancelled&tier=${tier}`
 
-    const subscription = await createPaypalSubscription({ tier, requestOrigin: origin, customId, returnUrl, cancelUrl })
+    const subscription = await createPaypalSubscription({
+      tier,
+      requestOrigin: origin,
+      customId,
+      returnUrl,
+      cancelUrl,
+      firstMonthDiscountPct: discountPct > 0 ? discountPct : undefined,
+    })
 
     await upsertPaypalEntitlement({
       accountKey,

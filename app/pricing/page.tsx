@@ -2,10 +2,85 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Check, Minus, ChevronDown, ChevronUp } from "lucide-react"
+import { Check, Minus, ChevronDown, ChevronUp, Tag } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
+
+function CouponBanner({
+  coupon,
+  onClear,
+}: {
+  coupon: { code: string; discount_pct: number } | null
+  onClear: () => void
+}) {
+  if (!coupon) return null
+  return (
+    <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-emerald-600">
+        <Tag className="h-4 w-4" />
+        <span>
+          Coupon <strong>{coupon.code.toUpperCase()}</strong> applied — {coupon.discount_pct}% off your first month
+        </span>
+      </div>
+      <button onClick={onClear} className="text-xs text-emerald-500 hover:text-emerald-400 underline">
+        Remove
+      </button>
+    </div>
+  )
+}
+
+function CouponInput({ onApplied }: { onApplied: (coupon: { code: string; discount_pct: number }) => void }) {
+  const [code, setCode] = useState("")
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle")
+  const [errorMsg, setErrorMsg] = useState("")
+
+  async function handleApply(e: React.FormEvent) {
+    e.preventDefault()
+    if (!code.trim()) return
+    setState("loading")
+    setErrorMsg("")
+    try {
+      const res = await fetch("/api/billing/coupon/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
+      })
+      const data = await res.json()
+      if (data.valid) {
+        onApplied({ code: data.code, discount_pct: data.discount_pct })
+        setCode("")
+        setState("idle")
+      } else {
+        setErrorMsg(data.reason ?? "Invalid coupon code.")
+        setState("error")
+      }
+    } catch {
+      setErrorMsg("Could not validate coupon. Try again.")
+      setState("error")
+    }
+  }
+
+  return (
+    <form onSubmit={handleApply} className="flex items-center gap-2">
+      <div className="relative flex-1 max-w-xs">
+        <Tag className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={code}
+          onChange={(e) => { setCode(e.target.value); setState("idle"); setErrorMsg("") }}
+          placeholder="Coupon code"
+          className="w-full rounded-lg border border-border bg-card pl-9 pr-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/20"
+        />
+      </div>
+      <Button type="submit" variant="outline" size="sm" disabled={state === "loading" || !code.trim()}>
+        {state === "loading" ? "…" : "Apply"}
+      </Button>
+      {state === "error" && errorMsg && (
+        <span className="text-xs text-red-500">{errorMsg}</span>
+      )}
+    </form>
+  )
+}
 
 const tiers = [
   {
@@ -260,6 +335,21 @@ function FeatureCell({ value }: { value: FeatureValue }) {
 }
 
 export default function PricingPage() {
+  const [activeCoupon, setActiveCoupon] = useState<{ code: string; discount_pct: number } | null>(null)
+
+  function buildCheckoutUrl(checkoutTier: string) {
+    const base = `/api/billing/paypal/checkout?tier=${checkoutTier}`
+    return activeCoupon ? `${base}&coupon=${encodeURIComponent(activeCoupon.code)}` : base
+  }
+
+  function getDisplayPrice(tier: typeof tiers[0]) {
+    if (!activeCoupon || !tier.checkoutTier) return tier.price
+    const base = { pro: 299, team: 999, institutional: 4000 }[tier.checkoutTier as string]
+    if (!base) return tier.price
+    const discounted = (base * (1 - activeCoupon.discount_pct / 100)).toFixed(2)
+    return `$${discounted}`
+  }
+
   return (
     <main id="main-content">
       <Navbar />
@@ -274,6 +364,14 @@ export default function PricingPage() {
             Monthly PayPal subscriptions. Cancel anytime. No contracts.
           </p>
         </header>
+
+        {/* Coupon */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <CouponBanner coupon={activeCoupon} onClear={() => setActiveCoupon(null)} />
+          {!activeCoupon && (
+            <CouponInput onApplied={setActiveCoupon} />
+          )}
+        </div>
 
         {/* Tier cards */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 mb-16">
@@ -293,13 +391,23 @@ export default function PricingPage() {
               )}
               <p className="text-sm font-semibold text-foreground">{tier.name}</p>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-foreground">{tier.price}</span>
-                <span className="text-xs text-muted-foreground">{tier.sub}</span>
+                {activeCoupon && tier.checkoutTier ? (
+                  <>
+                    <span className="text-2xl font-bold text-emerald-500">{getDisplayPrice(tier)}</span>
+                    <span className="text-xs text-muted-foreground line-through ml-1">{tier.price}</span>
+                    <span className="text-xs text-muted-foreground">first month</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-2xl font-bold text-foreground">{tier.price}</span>
+                    <span className="text-xs text-muted-foreground">{tier.sub}</span>
+                  </>
+                )}
               </div>
               <p className="mt-3 text-sm text-muted-foreground flex-1">{tier.blurb}</p>
               {tier.checkoutTier ? (
                 <Button className="mt-5 w-full" variant={tier.popular ? "default" : "outline"} asChild>
-                  <Link href={`/api/billing/paypal/checkout?tier=${tier.checkoutTier}`}>
+                  <Link href={buildCheckoutUrl(tier.checkoutTier)}>
                     {tier.cta}
                   </Link>
                 </Button>

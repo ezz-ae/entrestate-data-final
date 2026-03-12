@@ -11,6 +11,7 @@ type CreateSubscriptionInput = {
   customId?: string
   returnUrl?: string
   cancelUrl?: string
+  firstMonthDiscountPct?: number
 }
 
 type VerifyWebhookInput = {
@@ -144,6 +145,31 @@ export async function createPaypalSubscription(input: CreateSubscriptionInput) {
   const planId = getPlanIdForTier(tier)
   const brandName = process.env.PAYPAL_BRAND_NAME || "Entrestate"
 
+  // Build plan override for first-month discount coupon
+  const TIER_PRICES: Record<PaidTier, string> = {
+    pro: "299.00",
+    team: "999.00",
+    institutional: "4000.00",
+  }
+  const planOverride = input.firstMonthDiscountPct
+    ? {
+        plan: {
+          billing_cycles: [
+            {
+              sequence: 1,
+              total_cycles: 1,
+              pricing_scheme: {
+                fixed_price: {
+                  value: (parseFloat(TIER_PRICES[tier]) * (1 - input.firstMonthDiscountPct / 100)).toFixed(2),
+                  currency_code: "USD",
+                },
+              },
+            },
+          ],
+        },
+      }
+    : {}
+
   const response = await paypalApiRequest("/v1/billing/subscriptions", {
     method: "POST",
     headers: {
@@ -159,6 +185,7 @@ export async function createPaypalSubscription(input: CreateSubscriptionInput) {
         return_url: returnUrl,
         cancel_url: cancelUrl,
       },
+      ...planOverride,
     }),
   })
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getRequestId } from "@/lib/api-errors"
-import { recordWebhookEvent } from "@/lib/billing-entitlements"
+import { recordWebhookEvent, redeemCoupon } from "@/lib/billing-entitlements"
 import { syncPaypalSubscriptionEntitlement } from "@/lib/paypal-entitlement-sync"
 
 export const runtime = "nodejs"
@@ -26,6 +26,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const accountKeyHint = url.searchParams.get("accountKey")?.trim() ?? null
   const tierHint = url.searchParams.get("tier")?.trim() ?? null
+  const couponCode = url.searchParams.get("coupon")?.trim() ?? null
   const subscriptionId = getSubscriptionIdFromParams(url.searchParams)
 
   const redirectUrl = new URL("/account", url.origin)
@@ -44,12 +45,20 @@ export async function GET(request: Request) {
       eventAt: new Date(),
     })
 
+    // Redeem coupon if present and subscription is active/approved
+    if (couponCode && sync.accountKey) {
+      await redeemCoupon(couponCode, sync.accountKey, sync.subscriptionId).catch(() => {
+        // Non-fatal — subscription already activated
+      })
+    }
+
     await recordWebhookEvent(
       `checkout-return-${crypto.randomUUID()}`,
       {
         source: "checkout_return",
         account_key: sync.accountKey,
         requested_tier: tierHint,
+        coupon_code: couponCode ?? null,
         subscription_status: sync.status,
         tier: sync.tier,
       },
