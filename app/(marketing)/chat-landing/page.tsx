@@ -59,6 +59,10 @@ export default function ChatLandingPage() {
               Entrestate
             </Link>
             <nav className="hidden lg:flex items-center gap-8">
+              <Link href="/chat" className="text-sm font-bold text-primary relative group">
+                Chat
+                <span className="absolute -bottom-1 left-0 w-full h-px bg-primary" />
+              </Link>
               {["Platform", "Intelligence", "Enterprise", "Pricing"].map((item) => (
                 <Link key={item} href="#" className="text-sm font-medium text-muted-foreground/70 hover:text-foreground transition-colors relative group">
                   {item}
