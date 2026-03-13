@@ -103,7 +103,7 @@ export default async function OverviewPage() {
     getOutcomeIntentCounts().catch(() => ({ data_as_of: new Date().toISOString(), rows: [] })),
   ])
 
-  const totalProjects = pulse.summary.total || 7015
+  const totalProjects = pulse.summary.total || 1216
   const highConfidence = pulse.summary.high_confidence || 593
   const buySignals = pulse.summary.buy_signals || 2667
   const avgPrice = pulse.summary.avg_price

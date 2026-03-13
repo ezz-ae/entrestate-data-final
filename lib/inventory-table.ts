@@ -1,9 +1,9 @@
 import "server-only"
 import { Prisma } from "@prisma/client"
 
-const DEFAULT_INVENTORY_TABLE = "inventory_full"
+const DEFAULT_INVENTORY_TABLE = "inventory_clean"
 const DEFAULT_AREAS_TABLE = "inventory_full"
-const DEFAULT_DEVELOPERS_TABLE = "inventory_full"
+const DEFAULT_DEVELOPERS_TABLE = "entrestate_developers_api"
 const DEFAULT_DETAIL_TABLE = "inventory_full"
 const DEFAULT_STATUS_TABLE = "entrestate_data_freshness"
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/

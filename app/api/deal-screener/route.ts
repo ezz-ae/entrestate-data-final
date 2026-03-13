@@ -19,7 +19,6 @@ const flatInputSchema = z.object({
   golden_visa_required: z.boolean().optional(),
   timing_signal: z.enum(["STRONG_BUY", "BUY", "HOLD", "WAIT", "AVOID"]).optional(),
   stress_grade_min: z.enum(["A", "B", "C", "D", "E"]).optional(),
-  affordability_tier: z.string().trim().min(1).optional(),
   sort_by: z
     .enum(["investor_score_v1", "price_from", "rental_yield", "developer_reliability_score"])
     .default("investor_score_v1"),
@@ -47,7 +46,6 @@ function normalizeInput(payload: unknown) {
         golden_visa_required: filters.golden_visa_required ?? filters.golden_visa,
         timing_signal: filters.timing_signal,
         stress_grade_min: filters.stress_grade_min,
-        affordability_tier: filters.affordability_tier,
       },
       sort_by: nested.data.sort_by,
       limit: nested.data.limit,
@@ -66,7 +64,6 @@ function normalizeInput(payload: unknown) {
       golden_visa_required: flat.data.golden_visa_required ?? flat.data.golden_visa,
       timing_signal: flat.data.timing_signal,
       stress_grade_min: flat.data.stress_grade_min,
-      affordability_tier: flat.data.affordability_tier,
     },
     sort_by: flat.data.sort_by,
     limit: flat.data.limit,

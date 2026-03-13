@@ -22,7 +22,7 @@ const evidenceLayers = [
     layer: "L3",
     name: "Dynamic (Living States)",
     reliability: "Medium",
-    description: "Real-time signals reflecting the current market state. Projects are treated as states moving through a lifecycle: Market Context, Developer Execution, Financial Logic, Delivery Risk, Exit Reality. Adjusts Data Confidence based on market events.",
+    description: "Live signals reflecting the current market state. Projects are treated as states moving through a lifecycle: Market Context, Developer Execution, Financial Logic, Delivery Risk, Exit Reality. Adjusts Data Confidence based on market events.",
     examples: "BUY/HOLD timing signals, price momentum indicators, inventory level changes",
     color: "border-amber-500/40 bg-amber-500/10",
   },
@@ -81,7 +81,7 @@ const dataSources = [
   {
     source: "Bayut",
     role: "Secondary market sensor and availability tracking",
-    usage: "L4 External sensor for inventory tracking and price momentum signals. Feeds L3 Dynamic layer for real-time market movement detection.",
+    usage: "L4 External sensor for inventory tracking and price momentum signals. Feeds L3 Dynamic layer for live market movement detection.",
   },
 ]
 

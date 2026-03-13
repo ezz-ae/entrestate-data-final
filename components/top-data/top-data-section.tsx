@@ -229,10 +229,12 @@ function TimingSignalsView({ data }: { data: unknown }) {
     bySignal.set(key, row)
   }
 
-  const signals: Array<{ key: "BUY" | "HOLD" | "WAIT"; tone: string }> = [
+  const signals: Array<{ key: "STRONG_BUY" | "BUY" | "HOLD" | "WAIT" | "AVOID"; tone: string }> = [
+    { key: "STRONG_BUY", tone: "border-emerald-600/50 bg-emerald-600/15" },
     { key: "BUY", tone: "border-emerald-500/50 bg-emerald-500/10" },
     { key: "HOLD", tone: "border-amber-500/50 bg-amber-500/10" },
-    { key: "WAIT", tone: "border-red-500/50 bg-red-500/10" },
+    { key: "WAIT", tone: "border-orange-500/50 bg-orange-500/10" },
+    { key: "AVOID", tone: "border-red-500/50 bg-red-500/10" },
   ]
 
   return (
@@ -263,17 +265,17 @@ function StressGradesView({ data }: { data: unknown }) {
   const byGrade = new Map<string, number>()
 
   for (const row of rows) {
-    const grade = asText(valueFromKeys(row, ["grade", "label"]), "F").toUpperCase()
+    const grade = asText(valueFromKeys(row, ["grade", "label"]), "E").toUpperCase()
     const count = asNumber(valueFromKeys(row, ["count", "projects"])) ?? 0
     byGrade.set(grade, count)
   }
 
-  const grades: Array<{ grade: "A" | "B" | "C" | "D" | "F"; barColor: string }> = [
+  const grades: Array<{ grade: "A" | "B" | "C" | "D" | "E"; barColor: string }> = [
     { grade: "A", barColor: "bg-emerald-700" },
     { grade: "B", barColor: "bg-emerald-500" },
     { grade: "C", barColor: "bg-amber-500" },
     { grade: "D", barColor: "bg-orange-500" },
-    { grade: "F", barColor: "bg-red-500" },
+    { grade: "E", barColor: "bg-red-500" },
   ]
 
   const max = Math.max(...grades.map((entry) => byGrade.get(entry.grade) ?? 0), 1)
@@ -354,6 +356,38 @@ function OutcomeIntentsView({ data }: { data: unknown }) {
   )
 }
 
+function LabelDistributionView({ data, emptyMessage }: { data: unknown; emptyMessage: string }) {
+  const rows = dataToRecords(data)
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      {rows.slice(0, 12).map((row, index) => {
+        const label = asText(valueFromKeys(row, ["label", "grade", "signal", "name"]), `Label ${index + 1}`)
+        const count = asNumber(valueFromKeys(row, ["count", "projects"])) ?? 0
+        const avgPrice = asNumber(valueFromKeys(row, ["avg_price", "price"]))
+        const avgYield = asNumber(valueFromKeys(row, ["avg_yield", "yield"]))
+        const avgScore = asNumber(valueFromKeys(row, ["avg_score", "score", "investor_score_v1"]))
+
+        return (
+          <div key={`${label}-${index}`} className="rounded-lg border border-border/60 bg-background/40 p-3">
+            <p className="text-sm font-medium text-foreground">{label}</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>{count.toLocaleString()} projects</span>
+              {avgPrice !== null ? <span>{formatAedValue(avgPrice)}</span> : null}
+              {avgYield !== null ? <span>{formatYieldValue(avgYield)}</span> : null}
+              {avgScore !== null ? <span>Score {formatScore(avgScore)}</span> : null}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function TopProjectsTableView({ data }: { data: unknown }) {
   const rows = dataToRecords(data)
 
@@ -383,9 +417,9 @@ function TopProjectsTableView({ data }: { data: unknown }) {
             const developer = asText(valueFromKeys(row, ["developer"]))
             const price = asNumber(valueFromKeys(row, ["price_from", "price", "l1_canonical_price", "avg_price"]))
             const yieldValue = asNumber(valueFromKeys(row, ["rental_yield", "yield", "l1_canonical_yield", "avg_yield"]))
-            const stressGrade = asText(valueFromKeys(row, ["stress_grade_v1", "stress_grade", "l2_stress_test_grade", "grade"]), "F")
-            const timing = asText(valueFromKeys(row, ["timing_label", "timing", "timing_signal", "l3_timing_signal"]), "WAIT")
-            const godMetric = asNumber(valueFromKeys(row, ["investor_score_v1", "god_metric", "engine_god_metric", "score"]))
+            const stressGrade = asText(valueFromKeys(row, ["stress_grade_v1", "grade"]), "E")
+            const timing = asText(valueFromKeys(row, ["timing_label", "timing"]), "WAIT")
+            const godMetric = asNumber(valueFromKeys(row, ["investor_score_v1", "score"]))
 
             return (
               <tr key={`${name}-${index}`} className="border-t border-border/50 bg-card/30 transition hover:bg-primary/5">
@@ -585,12 +619,22 @@ function renderSection(section: string, data: unknown) {
   if (section === "market-pulse") return <MarketPulseView data={data} />
   if (section === "timing-signals") return <TimingSignalsView data={data} />
   if (section === "stress-grades") return <StressGradesView data={data} />
-  if (section === "affordability") return <AffordabilityView data={data} />
-  if (section === "outcome-intents") return <OutcomeIntentsView data={data} />
+  if (section === "yield-labels") {
+    return <LabelDistributionView data={data} emptyMessage="No yield distribution available." />
+  }
+  if (section === "evidence-levels") {
+    return <LabelDistributionView data={data} emptyMessage="No evidence distribution available." />
+  }
+  if (section === "decision-labels") {
+    return <LabelDistributionView data={data} emptyMessage="No decision label distribution available." />
+  }
   if (section === "top-projects") return <TopProjectsTableView data={data} />
   if (section === "area-intelligence") return <AreaIntelligenceView data={data} />
   if (section === "developer-reliability") return <DeveloperReliabilityView data={data} />
   if (section === "golden-visa") return <GoldenVisaView data={data} />
+  if (section === "dld-market") return <GenericListView data={data} />
+  if (section === "affordability") return <AffordabilityView data={data} />
+  if (section === "outcome-intents") return <OutcomeIntentsView data={data} />
   if (section === "trust-bar") return <TrustBarView data={data} />
   return <GenericListView data={data} />
 }

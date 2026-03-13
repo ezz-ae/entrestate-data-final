@@ -181,7 +181,11 @@ function stripThinkTags(text: string): string {
 function displayMessageText(message: any): string {
   const text = messageText(message)
   if (message?.role === "assistant") {
-    return stripThinkTags(text)
+    const cleaned = stripThinkTags(text)
+    if (cleaned.toLowerCase().includes("tool result is missing for tool call")) {
+      return "Data retrieval failed. Please retry your request."
+    }
+    return cleaned
   }
   return text
 }

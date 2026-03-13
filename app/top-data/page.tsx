@@ -9,13 +9,14 @@ const REQUIRED_SECTIONS = [
   "market-pulse",
   "timing-signals",
   "stress-grades",
-  "affordability",
-  "outcome-intents",
+  "yield-labels",
+  "evidence-levels",
+  "decision-labels",
   "top-projects",
   "area-intelligence",
   "developer-reliability",
   "golden-visa",
-  "trust-bar",
+  "dld-market",
 ] as const
 
 type RequiredSection = (typeof REQUIRED_SECTIONS)[number]
@@ -24,13 +25,14 @@ const SECTION_ALIASES: Record<string, RequiredSection> = {
   market_pulse: "market-pulse",
   timing_signals: "timing-signals",
   stress_grades: "stress-grades",
-  outcome_intents: "outcome-intents",
+  yield_labels: "yield-labels",
+  evidence_levels: "evidence-levels",
+  decision_labels: "decision-labels",
   top_projects: "top-projects",
   area_intelligence: "area-intelligence",
   developer_reliability: "developer-reliability",
   golden_visa: "golden-visa",
-  trust_bar: "trust-bar",
-  confidence: "trust-bar",
+  dld_market: "dld-market",
 }
 
 const SECTION_COPY: Record<
@@ -43,19 +45,23 @@ const SECTION_COPY: Record<
   },
   "timing-signals": {
     title: "Timing Signals",
-    subtitle: "Distribution of BUY / HOLD / WAIT signals with price and yield context.",
+    subtitle: "Distribution of STRONG_BUY / BUY / HOLD / WAIT / AVOID signals with price and yield context.",
   },
   "stress-grades": {
     title: "Stress Grades",
-    subtitle: "Portfolio resilience distribution from grade A through F.",
+    subtitle: "Portfolio resilience distribution from grade A through E.",
   },
-  affordability: {
-    title: "Affordability Tiers",
-    subtitle: "Project mix by affordability segment and yield profile.",
+  "yield-labels": {
+    title: "Yield Labels",
+    subtitle: "Yield tier distribution with pricing context.",
   },
-  "outcome-intents": {
-    title: "Outcome Intents",
-    subtitle: "What investor goals the current inventory best serves.",
+  "evidence-levels": {
+    title: "Evidence Levels",
+    subtitle: "Data confidence mix and verified evidence coverage.",
+  },
+  "decision-labels": {
+    title: "Decision Labels",
+    subtitle: "STRONG_BUY to AVOID distribution across scored inventory.",
   },
   "top-projects": {
     title: "Top Projects",
@@ -73,18 +79,17 @@ const SECTION_COPY: Record<
     title: "Golden Visa",
     subtitle: "Eligible inventory counts and quality profile for AED 2M+ buyers.",
   },
-  "trust-bar": {
-    title: "Trust Bar",
-    subtitle: "Data hierarchy, engine stack, and confidence distribution across the dataset.",
+  "dld-market": {
+    title: "DLD Market",
+    subtitle: "Transaction snapshots and notable deal flow from DLD feeds.",
   },
 }
 
 function sectionLayoutClass(section: (typeof REQUIRED_SECTIONS)[number]) {
   if (section === "market-pulse") return "xl:col-span-3"
   if (section === "top-projects") return "xl:col-span-3"
-  if (section === "outcome-intents") return "xl:col-span-2"
   if (section === "area-intelligence") return "xl:col-span-2"
-  if (section === "trust-bar") return "xl:col-span-2"
+  if (section === "dld-market") return "xl:col-span-2"
   return "xl:col-span-1"
 }
 

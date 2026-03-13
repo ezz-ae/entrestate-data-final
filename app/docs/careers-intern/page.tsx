@@ -4,8 +4,8 @@ import { ArrowRight, Users, Code, Database, Handshake, Briefcase, GraduationCap,
 const engineeringRoles = [
   {
     title: "Platform Engineer",
-    focus: "Full-stack development on the Intelligence OS — Next.js, TypeScript, Neon PostgreSQL, real-time data surfaces.",
-    skills: ["React/Next.js", "TypeScript", "PostgreSQL", "API design", "Real-time systems"],
+    focus: "Full-stack development on the Intelligence OS — Next.js, TypeScript, Neon PostgreSQL, live data surfaces.",
+    skills: ["React/Next.js", "TypeScript", "PostgreSQL", "API design", "Live systems"],
   },
   {
     title: "AI Infrastructure Engineer",
@@ -186,7 +186,7 @@ export default function CareersInternDocsPage() {
           </div>
           <div className="rounded-xl border border-border/60 bg-background/40 p-4">
             <h3 className="text-sm font-semibold text-foreground">Data Pipeline</h3>
-            <p className="mt-1 text-xs text-muted-foreground">The 10-Phase Pipeline processing 7,015+ projects through entity extraction, price verification, stress testing, and evidence compilation.</p>
+            <p className="mt-1 text-xs text-muted-foreground">The 10-Phase Pipeline processing 1,216+ projects through entity extraction, price verification, stress testing, and evidence compilation.</p>
           </div>
           <div className="rounded-xl border border-border/60 bg-background/40 p-4">
             <h3 className="text-sm font-semibold text-foreground">Evidence Stack</h3>

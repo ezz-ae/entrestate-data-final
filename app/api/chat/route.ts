@@ -18,8 +18,6 @@ import {
   executeDeveloperDueDiligence,
   executeGenerateInvestorMemo,
   executePriceRealityCheck,
-  executeRefreshDldData,
-  executeScenarioStressTest,
 } from "@/lib/copilot/executor"
 import { collectGuardrailWarnings } from "@/lib/copilot/guardrails"
 import {
@@ -31,7 +29,6 @@ import {
   type DldTransactionSearchInput,
   type GenerateInvestorMemoInput,
   type PriceRealityCheckInput,
-  type ScenarioStressTestInput,
   areaRiskBriefInputSchema,
   copilotSystemPrompt,
   copilotToolDescriptions,
@@ -43,27 +40,19 @@ import {
   developerDueDiligenceInputSchema,
   generateInvestorMemoInputSchema,
   priceRealityCheckInputSchema,
-  refreshDldDataInputSchema,
-  scenarioStressTestInputSchema,
 } from "@/lib/copilot/tools"
 import {
   mcpCrossReference,
   mcpDescribeTable,
   mcpQuery,
-  mcpSampleData,
-  mcpTriggerScraper,
 } from "@/lib/mcp/server"
 import {
   mcpCrossReferenceInputSchema,
   mcpDescribeTableInputSchema,
   mcpQueryInputSchema,
-  mcpSampleDataInputSchema,
-  mcpTriggerScraperInputSchema,
   type McpCrossReferenceInput,
   type McpDescribeTableInput,
   type McpQueryInput,
-  type McpSampleDataInput,
-  type McpTriggerScraperInput,
 } from "@/lib/mcp/schemas"
 
 export const runtime = "nodejs"
@@ -209,7 +198,7 @@ function parseTimingSignal(message: string): "BUY" | "HOLD" | "WAIT" | undefined
 }
 
 function collectSources(toolResults: unknown[]): string[] {
-  const sources = new Set<string>(["inventory_full"])
+  const sources = new Set<string>(["inventory_clean"])
   for (const result of toolResults) {
     const record = toRecord(result) as ToolResultEnvelope | null
     const source = typeof record?.source === "string" ? record.source.trim() : ""
@@ -494,89 +483,104 @@ export async function POST(request: Request) {
 
     const model = resolveCopilotModel()
 
+    const safeTool = <TInput,>(
+      source: string,
+      execute: (input: TInput) => Promise<Record<string, unknown>>,
+    ) => async (input: TInput) => {
+      try {
+        return withGuardrails(await execute(input))
+      } catch (error) {
+        console.error("Chat tool failed:", { requestId, source, error })
+        return withGuardrails({
+          source,
+          data_as_of: new Date().toISOString(),
+          no_results: true,
+          error: "tool_failed",
+        })
+      }
+    }
+
+    const safeToolNoGuard = <TInput,>(
+      source: string,
+      execute: (input: TInput) => Promise<Record<string, unknown>>,
+    ) => async (input: TInput) => {
+      try {
+        return await execute(input)
+      } catch (error) {
+        console.error("Chat tool failed:", { requestId, source, error })
+        return {
+          source,
+          data_as_of: new Date().toISOString(),
+          no_results: true,
+          error: "tool_failed",
+        }
+      }
+    }
+
     const toolset = {
       deal_screener: tool({
         description: copilotToolDescriptions.deal_screener,
         inputSchema: dealScreenerInputSchema,
-        execute: async (input: DealScreenerInput) => withGuardrails(await executeDealScreener(input)),
+        execute: safeTool("deal_screener", executeDealScreener),
       }),
       price_reality_check: tool({
         description: copilotToolDescriptions.price_reality_check,
         inputSchema: priceRealityCheckInputSchema,
-        execute: async (input: PriceRealityCheckInput) => withGuardrails(await executePriceRealityCheck(input)),
+        execute: safeTool("price_reality_check", executePriceRealityCheck),
       }),
       area_risk_brief: tool({
         description: copilotToolDescriptions.area_risk_brief,
         inputSchema: areaRiskBriefInputSchema,
-        execute: async (input: AreaRiskBriefInput) => withGuardrails(await executeAreaRiskBrief(input)),
+        execute: safeTool("area_risk_brief", executeAreaRiskBrief),
       }),
       developer_due_diligence: tool({
         description: copilotToolDescriptions.developer_due_diligence,
         inputSchema: developerDueDiligenceInputSchema,
-        execute: async (input: DeveloperDueDiligenceInput) =>
-          withGuardrails(await executeDeveloperDueDiligence(input)),
+        execute: safeTool("developer_due_diligence", executeDeveloperDueDiligence),
       }),
       generate_investor_memo: tool({
         description: copilotToolDescriptions.generate_investor_memo,
         inputSchema: generateInvestorMemoInputSchema,
-        execute: async (input: GenerateInvestorMemoInput) => withGuardrails(await executeGenerateInvestorMemo(input)),
+        execute: safeTool("generate_investor_memo", executeGenerateInvestorMemo),
       }),
       dld_transaction_search: tool({
         description: copilotToolDescriptions.dld_transaction_search,
         inputSchema: dldTransactionSearchInputSchema,
-        execute: async (input: DldTransactionSearchInput) => withGuardrails(await executeDldTransactionSearch(input)),
+        execute: safeTool("dld_transaction_search", executeDldTransactionSearch),
       }),
       dld_area_benchmark: tool({
         description: copilotToolDescriptions.dld_area_benchmark,
         inputSchema: dldAreaBenchmarkInputSchema,
-        execute: async (input: DldAreaBenchmarkInput) => withGuardrails(await executeDldAreaBenchmark(input)),
+        execute: safeTool("dld_area_benchmark", executeDldAreaBenchmark),
       }),
       dld_market_pulse: tool({
         description: copilotToolDescriptions.dld_market_pulse,
         inputSchema: dldMarketPulseInputSchema,
-        execute: async () => withGuardrails(await executeDldMarketPulse()),
+        execute: safeTool("dld_market_pulse", async (_input: unknown) => executeDldMarketPulse()),
       }),
       dld_notable_deals: tool({
         description: copilotToolDescriptions.dld_notable_deals,
         inputSchema: dldNotableDealsInputSchema,
-        execute: async (input: DldNotableDealsInput) => withGuardrails(await executeDldNotableDeals(input)),
-      }),
-      refresh_dld_data: tool({
-        description: copilotToolDescriptions.refresh_dld_data,
-        inputSchema: refreshDldDataInputSchema,
-        execute: async () => withGuardrails(await executeRefreshDldData()),
-      }),
-      scenario_stress_test: tool({
-        description: copilotToolDescriptions.scenario_stress_test,
-        inputSchema: scenarioStressTestInputSchema,
-        execute: async (input: ScenarioStressTestInput) => withGuardrails(await executeScenarioStressTest(input)),
+        execute: safeTool("dld_notable_deals", executeDldNotableDeals),
       }),
       mcp_query: tool({
         description:
           "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, aggregations. Only SELECT/WITH allowed, max 100 rows.",
         inputSchema: mcpQueryInputSchema,
-        execute: async (input: McpQueryInput) => withGuardrails(await mcpQuery(input)),
+        execute: safeTool("mcp_query", mcpQuery),
       }),
       mcp_describe_table: tool({
         description: "Inspect a table's schema: column names, types, row count. Use before querying unfamiliar tables.",
         inputSchema: mcpDescribeTableInputSchema,
-        execute: async (input: McpDescribeTableInput) => await mcpDescribeTable(input.table_name),
-      }),
-      mcp_sample_data: tool({
-        description: "Preview sample rows from any table (1-20 rows). Use to understand data format before writing queries.",
-        inputSchema: mcpSampleDataInputSchema,
-        execute: async (input: McpSampleDataInput) => await mcpSampleData(input.table_name, input.limit),
+        execute: safeToolNoGuard("mcp_describe_table", async (input: McpDescribeTableInput) =>
+          mcpDescribeTable(input.table_name),
+        ),
       }),
       mcp_cross_reference: tool({
         description:
           "Run pre-built cross-reference analytics: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report. Optionally filter by area name.",
         inputSchema: mcpCrossReferenceInputSchema,
-        execute: async (input: McpCrossReferenceInput) => withGuardrails(await mcpCrossReference(input)),
-      }),
-      mcp_trigger_scraper: tool({
-        description: "Trigger a live data scraper. Currently supports: arvo_dld (DLD transactions from arvo.co API).",
-        inputSchema: mcpTriggerScraperInputSchema,
-        execute: async (input: McpTriggerScraperInput) => await mcpTriggerScraper(input.source),
+        execute: safeTool("mcp_cross_reference", mcpCrossReference),
       }),
     } as const
 

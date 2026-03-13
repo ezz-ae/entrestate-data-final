@@ -7,11 +7,15 @@ function baseClassName(colorClass: string) {
 export function TimingSignalBadge({ signal }: { signal: string | null | undefined }) {
   const value = (signal ?? "UNKNOWN").toUpperCase()
   const tone =
-    value === "BUY"
-      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-      : value === "HOLD"
-        ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
-        : "border-red-500/50 bg-red-500/10 text-red-300"
+    value === "STRONG_BUY"
+      ? "border-emerald-600/50 bg-emerald-600/15 text-emerald-200"
+      : value === "BUY"
+        ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+        : value === "HOLD"
+          ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
+          : value === "WAIT"
+            ? "border-orange-500/50 bg-orange-500/10 text-orange-300"
+            : "border-red-500/50 bg-red-500/10 text-red-300"
 
   return <span className={baseClassName(tone)}>{value}</span>
 }
@@ -43,4 +47,3 @@ export function ConfidenceBadge({ confidence }: { confidence: string | null | un
 
   return <span className={baseClassName(tone)}>{value}</span>
 }
-

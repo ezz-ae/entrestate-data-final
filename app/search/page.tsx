@@ -257,7 +257,7 @@ export default function SearchPage() {
             Project Search
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Filter across {(7015).toLocaleString()} scored projects. Click any result to go deeper.
+            Filter across {(1216).toLocaleString()} scored projects. Click any result to go deeper.
           </p>
         </div>
 

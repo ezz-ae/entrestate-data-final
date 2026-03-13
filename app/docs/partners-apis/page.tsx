@@ -38,7 +38,7 @@ const partnerTracks = [
       "market_card: area-level intelligence snapshot",
       "area_table: comparative market data grid",
       "score_badge: investment score with confidence indicator",
-      "market_pulse: real-time market movement signals",
+      "market_pulse: live market movement signals",
     ],
   },
 ]
@@ -178,7 +178,7 @@ export default function PartnersApisDocsPage() {
               <li><strong className="text-foreground">market_card</strong> — Area-level intelligence snapshot</li>
               <li><strong className="text-foreground">area_table</strong> — Comparative market data grid</li>
               <li><strong className="text-foreground">score_badge</strong> — Investment score + confidence</li>
-              <li><strong className="text-foreground">market_pulse</strong> — Real-time movement signals</li>
+              <li><strong className="text-foreground">market_pulse</strong> — Live movement signals</li>
             </ul>
           </div>
           <div className="rounded-xl border border-border/60 bg-background/40 p-4">

@@ -58,7 +58,8 @@ function tableEndsWith(tableName: string, suffix: string) {
 
 const USE_CURATED_PROPERTIES_VIEW =
   tableEndsWith(PROPERTIES_TABLE_NAME, "entrestate_projects_api") ||
-  tableEndsWith(PROPERTIES_TABLE_NAME, "entrestate_projects_api_full")
+  tableEndsWith(PROPERTIES_TABLE_NAME, "entrestate_projects_api_full") ||
+  tableEndsWith(PROPERTIES_TABLE_NAME, "inventory_clean")
 
 const USE_CURATED_AREAS_VIEW = tableEndsWith(AREAS_TABLE_NAME, "entrestate_areas_api")
 const USE_CURATED_DEVELOPERS_VIEW = tableEndsWith(DEVELOPERS_TABLE_NAME, "entrestate_developers_api")
@@ -212,7 +213,6 @@ function buildPropertyClauses(filters?: PropertyFilters): Prisma.Sql[] {
         Prisma.sql`(bedrooms_min IS NULL OR bedrooms_max IS NULL OR bedrooms_min <= bedrooms_max)`,
         Prisma.sql`TRIM(COALESCE(area, '')) <> ''`,
         Prisma.sql`TRIM(COALESCE(developer, '')) <> ''`,
-        Prisma.sql`COALESCE(price_confidence, 'LOW') IN ('MEDIUM', 'HIGH')`,
       ]
     : [
         Prisma.sql`name IS NOT NULL`,
@@ -740,48 +740,30 @@ export async function listDevelopers(): Promise<{
   const curatedRows = USE_CURATED_DEVELOPERS_VIEW
     ? await runQuery(Prisma.sql`
         SELECT
-          COALESCE(
-            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'name', '')), ''),
-            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'developer', '')), '')
-          ) AS developer,
-          COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) AS projects,
-          COALESCE(
-            (to_jsonb(t) ->> 'avg_score')::numeric,
-            (to_jsonb(t) ->> 'avg_quality')::numeric,
-            (to_jsonb(t) ->> 'reliability')::numeric
-          ) AS reliability,
-          COALESCE(
-            (to_jsonb(t) ->> 'avg_score')::numeric,
-            (to_jsonb(t) ->> 'avg_quality')::numeric,
-            (to_jsonb(t) ->> 'efficiency')::numeric
-          ) AS efficiency,
-          (to_jsonb(t) ->> 'avg_price')::numeric AS avg_price,
+          id,
+          name AS developer,
+          slug,
+          tier,
+          logo AS logo_url,
+          project_count::int AS projects,
+          avg_score::numeric AS reliability,
+          avg_score::numeric AS efficiency,
+          avg_price::numeric AS avg_price,
+          avg_yield::numeric AS avg_yield,
+          buy_signals::int AS buy_signals,
+          safe_projects::int AS safe_projects,
           CASE
-            WHEN jsonb_typeof(COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas', '[]'::jsonb)) = 'array' THEN
-              ARRAY(
-                SELECT value
-                FROM jsonb_array_elements_text(
-                  COALESCE(
-                    to_jsonb(t) -> 'areas',
-                    to_jsonb(t) -> 'top_areas',
-                    '[]'::jsonb
-                  )
-                )
-              )
-            WHEN jsonb_typeof(COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas', '[]'::jsonb)) = 'string' THEN
-              regexp_split_to_array(
-                COALESCE(to_jsonb(t) -> 'areas', to_jsonb(t) -> 'top_areas') #>> '{}',
-                E' *, *'
-              )
+            WHEN jsonb_typeof(areas::jsonb) = 'array' THEN
+              ARRAY(SELECT value FROM jsonb_array_elements_text(areas::jsonb))
+            WHEN jsonb_typeof(areas::jsonb) = 'string' THEN
+              regexp_split_to_array(areas::text, E' *, *')
             ELSE ARRAY[]::text[]
-          END AS top_areas
-        FROM ${DEVELOPERS_TABLE_SQL} t
-        WHERE COALESCE(
-            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'name', '')), ''),
-            NULLIF(TRIM(COALESCE(to_jsonb(t) ->> 'developer', '')), '')
-          ) IS NOT NULL
-          AND COALESCE((to_jsonb(t) ->> 'total_projects')::int, 0) >= 2
-        ORDER BY reliability DESC NULLS LAST
+          END AS top_areas,
+          top_project,
+          payload
+        FROM ${DEVELOPERS_TABLE_SQL}
+        WHERE name IS NOT NULL
+        ORDER BY project_count DESC
       `)
     : []
 
@@ -871,19 +853,26 @@ export async function listDevelopers(): Promise<{
     developers: rows.map((row) => {
       const key = String(row.developer ?? "").toLowerCase()
       const profile = profileMap.get(key)
+      const rowLogo = (row as DecisionRecord).logo_url as string | null | undefined
+      const rowSlug = (row as DecisionRecord).slug as string | null | undefined
       const inlineTopAreas = Array.isArray((row as DecisionRecord).top_areas)
         ? ((row as DecisionRecord).top_areas as string[])
         : []
       const topAreas = inlineTopAreas.length > 0 ? inlineTopAreas : topAreasMap.get(key) ?? []
-      const topProjects = topProjectsMap.get(key) ?? []
+      const inlineTopProjects = Array.isArray((row as DecisionRecord).top_projects)
+        ? ((row as DecisionRecord).top_projects as string[])
+        : typeof (row as DecisionRecord).top_project === "string"
+          ? [String((row as DecisionRecord).top_project)]
+          : []
+      const topProjects = inlineTopProjects.length > 0 ? inlineTopProjects : topProjectsMap.get(key) ?? []
       return {
         ...row,
-        logo_url: profile?.logo_url ?? null,
+        logo_url: rowLogo ?? profile?.logo_url ?? null,
         founded_year: profile?.founded_year ?? null,
         hq: profile?.hq ?? null,
         top_areas: topAreas,
         top_projects: topProjects,
-        slug: slugifyName(String(row.developer ?? "developer")),
+        slug: rowSlug ?? slugifyName(String(row.developer ?? "developer")),
       }
     }),
   }

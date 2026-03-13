@@ -190,7 +190,7 @@ const articleSeeds: ArticleSeed[] = [
   {
     title: "L3: Dynamic (Living States/Inventory)",
     category: "Evidence Stack",
-    summary: "Real-time and near-real-time inventory and operational status data.",
+    summary: "Live and near-live inventory and operational status data.",
     scope: ["Availability updates", "Listing state changes", "Pipeline movements"],
     execution: ["Capture state transitions", "Reconcile stale records", "Expose freshness windows"],
   },

@@ -247,10 +247,6 @@ function buildDealScreenerFilters(
     clauses.push(Prisma.sql`stress_grade_v1 IN (${toSqlList([...allowedGrades])})`)
   }
 
-  if (filters.affordability_tier) {
-    clauses.push(Prisma.sql`LOWER(COALESCE(affordability_tier, '')) = LOWER(${filters.affordability_tier})`)
-  }
-
   return clauses
 }
 
@@ -340,7 +336,6 @@ export async function executePriceRealityCheck(input: PriceRealityCheckInput): P
     requirePrice: true,
     requireStress: true,
     requireArea: true,
-    requireConfidence: true,
     onlyUae: true,
     requireBedroomSanity: true,
   })
@@ -378,7 +373,6 @@ export async function executeAreaRiskBrief(input: AreaRiskBriefInput): Promise<T
     requirePrice: true,
     requireStress: true,
     requireArea: true,
-    requireConfidence: true,
     onlyUae: true,
     requireBedroomSanity: true,
   })
@@ -479,7 +473,6 @@ async function loadProjectContext(projectName: string): Promise<DbRow | null> {
     requirePrice: true,
     requireStress: true,
     requireArea: true,
-    requireConfidence: true,
     onlyUae: true,
     requireBedroomSanity: true,
   })
@@ -1017,9 +1010,11 @@ export async function executeDldAreaBenchmark(input: DldAreaBenchmarkInput) {
     (tx) =>
       tx.$queryRaw<DbRow[]>`
         SELECT * FROM dld_area_benchmarks_live
-        WHERE LOWER(area) LIKE LOWER(${`%${input.area_name}%`})
-        ORDER BY total_transactions DESC
-        LIMIT 5
+        WHERE UPPER(area) = UPPER(${input.area_name})
+           OR UPPER(area) LIKE '%' || UPPER(${input.area_name}) || '%'
+           OR UPPER(${input.area_name}) LIKE '%' || UPPER(area) || '%'
+        ORDER BY LENGTH(area) ASC
+        LIMIT 1
       `,
     STATEMENT_TIMEOUT_MS,
   )) as DbRow[]
@@ -1144,14 +1139,22 @@ export async function executeScenarioStressTest(input: ScenarioStressTestInput) 
         name,
         developer,
         ${COPILOT_AREA_EXPR} AS area,
-        price_from AS l1_canonical_price,
-        rental_yield AS l1_canonical_yield,
-        stress_grade_v1 AS l2_stress_test_grade,
-        timing_label AS l3_timing_signal,
-        investor_score_v1 AS engine_god_metric
+        price_from,
+        rental_yield,
+        timing_label,
+        decision_label_v1,
+        investor_score_v1,
+        stress_score,
+        stress_grade_v1,
+        developer_reliability_score,
+        supply_resilience_score,
+        liquidity_resilience_score,
+        pricing_discipline_score,
+        handover_reliability_score,
+        area_stability_score,
+        payment_plan_score
       FROM ${COPILOT_TABLE_SQL}
       WHERE LOWER(name) LIKE LOWER('%' || ${input.project_name} || '%')
-        AND price_from > 0
       LIMIT 1
     `,
   )
@@ -1161,126 +1164,15 @@ export async function executeScenarioStressTest(input: ScenarioStressTestInput) 
       source: "scenario_stress_test",
       data_as_of: nowIso(),
       no_results: true,
-      narrative: `Project '${input.project_name}' not found or lacks pricing data.`,
+      narrative: `Project '${input.project_name}' not found.`,
     }
   }
-
-  const project = rows[0]
-  const price = toFiniteNumber(project.l1_canonical_price, 0)
-  if (price === 0) {
-    return {
-      source: "scenario_stress_test",
-      data_as_of: nowIso(),
-      no_results: true,
-      narrative: `Project '${input.project_name}' has no valid list price.`,
-    }
-  }
-
-  const yieldPct = toFiniteNumber(project.l1_canonical_yield, 0)
-  const downPaymentPct = input.down_payment_pct / 100
-  const downPayment = price * downPaymentPct
-  const loanAmount = price - downPayment
-  const monthlyRate = input.interest_rate_pct / 100 / 12
-  const totalMonths = input.mortgage_years * 12
-  const amortizationMonths = Math.max(1, totalMonths)
-  const monthlyPayment =
-    monthlyRate === 0
-      ? loanAmount / amortizationMonths
-      : (loanAmount * monthlyRate * (1 + monthlyRate) ** amortizationMonths) /
-        ((1 + monthlyRate) ** amortizationMonths - 1)
-
-  const grossAnnualRent = price * (yieldPct / 100)
-  const vacancyLoss = grossAnnualRent * (input.vacancy_pct / 100)
-  const effectiveAnnualRent = Math.max(0, grossAnnualRent - vacancyLoss)
-  const operatingCost = effectiveAnnualRent * (input.operating_cost_pct / 100)
-  const annualDebtService = monthlyPayment * 12
-  const annualNetCashFlow = effectiveAnnualRent - operatingCost - annualDebtService
-  const dscr = annualDebtService > 0 ? (effectiveAnnualRent - operatingCost) / annualDebtService : null
-
-  const paidMonths = Math.min(input.hold_years * 12, amortizationMonths)
-  const remainingBalance =
-    monthlyRate === 0
-      ? loanAmount * Math.max(0, (amortizationMonths - paidMonths) / amortizationMonths)
-      : loanAmount *
-        (((1 + monthlyRate) ** amortizationMonths - (1 + monthlyRate) ** paidMonths) /
-          ((1 + monthlyRate) ** amortizationMonths - 1))
-
-  const priceChangeFactor = 1 + input.price_change_pct / 100
-  const exitPrice = price * priceChangeFactor
-  const saleProceeds = exitPrice - remainingBalance
-  const totalRentalCashFlow = annualNetCashFlow * input.hold_years
-  const totalReturn = totalRentalCashFlow + saleProceeds
-  const equityInvested = downPayment
-  const roiPct = equityInvested > 0 ? (totalReturn / equityInvested) * 100 : null
-  const breakEvenYears =
-    annualNetCashFlow > 0 ? Number((downPayment / annualNetCashFlow).toFixed(2)) : null
-
-  const stressPenaltyByGrade: Record<string, number> = {
-    A: 0.04,
-    B: 0.08,
-    C: 0.12,
-    D: 0.18,
-    "-": 0.1,
-  }
-  const stressGrade = String(project.l2_stress_test_grade ?? "-")
-  const stressAdjustedCashFlow = annualNetCashFlow * (1 - (stressPenaltyByGrade[stressGrade] ?? 0.1))
-
-  const riskFlags: string[] = []
-  if (dscr !== null && dscr < 1) riskFlags.push("DSCR below 1.0")
-  if (annualNetCashFlow < 0) riskFlags.push("Negative annual cash flow")
-  if (input.vacancy_pct >= 20) riskFlags.push("High vacancy assumption")
-  if (input.operating_cost_pct >= 25) riskFlags.push("Elevated operating cost assumption")
-
-  const signal =
-    dscr !== null && dscr >= 1.25 && ["A", "B"].includes(stressGrade) && annualNetCashFlow >= 0
-      ? "Strong Buy"
-      : dscr !== null && dscr >= 1 && annualNetCashFlow >= 0
-        ? "Buy"
-        : dscr !== null && dscr < 0.9
-          ? "Avoid"
-          : "Hold"
-
-  const metrics = {
-    price,
-    yield: yieldPct,
-    down_payment: downPayment,
-    loan_amount: loanAmount,
-    monthly_payment: monthlyPayment,
-    annual_debt_service: annualDebtService,
-    effective_annual_rent: effectiveAnnualRent,
-    operating_cost: operatingCost,
-    annual_net_cash_flow: annualNetCashFlow,
-    dscr: dscr !== null ? Number(dscr.toFixed(2)) : null,
-    stress_adjusted_cash_flow: stressAdjustedCashFlow,
-    total_return: totalReturn,
-    roi_pct: roiPct !== null ? Number(roiPct.toFixed(2)) : null,
-    break_even_years: breakEvenYears,
-    sale_proceeds: saleProceeds,
-  }
-
-  const decision = `Signal: ${signal}. DSCR ${dscr !== null ? dscr.toFixed(2) : "N/A"}. ${
-    riskFlags.length ? `Risks: ${riskFlags.join("; ")}.` : "No elevated risks detected."
-  }`
 
   return {
     source: "scenario_stress_test",
     data_as_of: nowIso(),
-    project: normalizeValue(project),
-    assumptions: {
-      down_payment_pct: input.down_payment_pct,
-      interest_rate_pct: input.interest_rate_pct,
-      mortgage_years: input.mortgage_years,
-      vacancy_pct: input.vacancy_pct,
-      operating_cost_pct: input.operating_cost_pct,
-      rent_growth_pct: input.rent_growth_pct,
-      price_change_pct: input.price_change_pct,
-      hold_years: input.hold_years,
-    },
-    metrics,
-    risk_flags: riskFlags,
-    signal,
-    decision,
-    narrative: `Exit price AED ${exitPrice.toLocaleString()}, sale proceeds AED ${saleProceeds.toLocaleString()}.`,
+    project: normalizeValue(rows[0]),
+    narrative: "Returned real V1 stress data (no simulated scenarios).",
   }
 }
 

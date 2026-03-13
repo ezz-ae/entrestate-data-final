@@ -34,7 +34,7 @@ const sectionIcon: Record<string, ComponentType<{ className?: string }>> = {
 }
 
 const keyNumbers = [
-  { label: "Active Projects", value: "7,015", detail: "Tracked across UAE" },
+  { label: "Active Projects", value: "1,216", detail: "Tracked across UAE" },
   { label: "Canonical Developers", value: "481", detail: "Normalized & verified" },
   { label: "BUY Signals", value: "2,667", detail: "Evidence-backed" },
   { label: "Pipeline Phases", value: "10", detail: "Sequential data refinement" },

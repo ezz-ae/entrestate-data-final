@@ -15,16 +15,9 @@ import {
   safeConsumeCopilotUsage,
   getAnonymousCopilotAccountKey,
 } from "@/lib/copilot-usage"
-import { prisma } from "@/lib/prisma"
 import {
   executeAreaRiskBrief,
   executeCompareProjects,
-  executeApplyDecisionLens,
-  executeListMarketEntities,
-  executeGenerateDecisionObject,
-  executeGenerateStrategicReport,
-  executeGenerateInvestmentRoadmap,
-  executeMonitorMarketSegments,
   executeDealScreener,
   executeDldAreaBenchmark,
   executeDldMarketPulse,
@@ -33,29 +26,19 @@ import {
   executeDeveloperDueDiligence,
   executeGenerateInvestorMemo,
   executePriceRealityCheck,
-  executeRefreshDldData,
-  executeScenarioStressTest,
 } from "@/lib/copilot/executor"
 import { collectGuardrailWarnings } from "@/lib/copilot/guardrails"
 import {
   type AreaRiskBriefInput,
-  type ApplyDecisionLensInput,
   type CompareProjectsInput,
   type DealScreenerInput,
   type DeveloperDueDiligenceInput,
   type DldAreaBenchmarkInput,
   type DldNotableDealsInput,
   type DldTransactionSearchInput,
-  type GenerateDecisionObjectInput,
   type GenerateInvestorMemoInput,
-  type GenerateInvestmentRoadmapInput,
-  type GenerateStrategicReportInput,
-  type ListMarketEntitiesInput,
-  type MonitorMarketSegmentsInput,
   type PriceRealityCheckInput,
-  type ScenarioStressTestInput,
   areaRiskBriefInputSchema,
-  applyDecisionLensInputSchema,
   compareProjectsInputSchema,
   dealScreenerInputSchema,
   developerDueDiligenceInputSchema,
@@ -63,30 +46,19 @@ import {
   dldMarketPulseInputSchema,
   dldNotableDealsInputSchema,
   dldTransactionSearchInputSchema,
-  generateDecisionObjectInputSchema,
   generateInvestorMemoInputSchema,
-  generateInvestmentRoadmapInputSchema,
-  generateStrategicReportInputSchema,
-  listMarketEntitiesInputSchema,
-  monitorMarketSegmentsInputSchema,
   priceRealityCheckInputSchema,
-  refreshDldDataInputSchema,
-  scenarioStressTestInputSchema,
   copilotSystemPrompt,
   copilotToolDescriptions,
 } from "@/lib/copilot/tools"
-import { mcpCrossReference, mcpDescribeTable, mcpQuery, mcpSampleData, mcpTriggerScraper } from "@/lib/mcp/server"
+import { mcpCrossReference, mcpDescribeTable, mcpQuery } from "@/lib/mcp/server"
 import {
   mcpCrossReferenceInputSchema,
   mcpDescribeTableInputSchema,
   mcpQueryInputSchema,
-  mcpSampleDataInputSchema,
-  mcpTriggerScraperInputSchema,
   type McpCrossReferenceInput,
   type McpDescribeTableInput,
   type McpQueryInput,
-  type McpSampleDataInput,
-  type McpTriggerScraperInput,
 } from "@/lib/mcp/schemas"
 
 import { loadChatSession, saveChatMessage } from "@/lib/copilot/persistence"
@@ -173,163 +145,110 @@ export async function POST(request: Request) {
       }
     }
 
+    const safeTool = <TInput,>(
+      source: string,
+      execute: (input: TInput) => Promise<Record<string, unknown>>,
+    ) => async (input: TInput) => {
+      try {
+        return withGuardrails(await execute(input))
+      } catch (error) {
+        console.error("Copilot tool failed:", { requestId, source, error })
+        return withGuardrails({
+          source,
+          data_as_of: new Date().toISOString(),
+          no_results: true,
+          error: "tool_failed",
+        })
+      }
+    }
+
+    const safeToolNoGuard = <TInput,>(
+      source: string,
+      execute: (input: TInput) => Promise<Record<string, unknown>>,
+    ) => async (input: TInput) => {
+      try {
+        return await execute(input)
+      } catch (error) {
+        console.error("Copilot tool failed:", { requestId, source, error })
+        return {
+          source,
+          data_as_of: new Date().toISOString(),
+          no_results: true,
+          error: "tool_failed",
+        }
+      }
+    }
+
     const toolset: Record<string, any> = {
       deal_screener: tool({
         description: copilotToolDescriptions.deal_screener,
         inputSchema: dealScreenerInputSchema,
-        execute: async (input: DealScreenerInput) => withGuardrails(await executeDealScreener(input)),
+        execute: safeTool("deal_screener", executeDealScreener),
       }),
       price_reality_check: tool({
         description: copilotToolDescriptions.price_reality_check,
         inputSchema: priceRealityCheckInputSchema,
-        execute: async (input: PriceRealityCheckInput) => withGuardrails(await executePriceRealityCheck(input)),
+        execute: safeTool("price_reality_check", executePriceRealityCheck),
       }),
       area_risk_brief: tool({
         description: copilotToolDescriptions.area_risk_brief,
         inputSchema: areaRiskBriefInputSchema,
-        execute: async (input: AreaRiskBriefInput) => withGuardrails(await executeAreaRiskBrief(input)),
+        execute: safeTool("area_risk_brief", executeAreaRiskBrief),
       }),
       developer_due_diligence: tool({
         description: copilotToolDescriptions.developer_due_diligence,
         inputSchema: developerDueDiligenceInputSchema,
-        execute: async (input: DeveloperDueDiligenceInput) =>
-          withGuardrails(await executeDeveloperDueDiligence(input)),
+        execute: safeTool("developer_due_diligence", executeDeveloperDueDiligence),
       }),
       generate_investor_memo: tool({
         description: copilotToolDescriptions.generate_investor_memo,
         inputSchema: generateInvestorMemoInputSchema,
-        execute: async (input: GenerateInvestorMemoInput) => withGuardrails(await executeGenerateInvestorMemo(input)),
+        execute: safeTool("generate_investor_memo", executeGenerateInvestorMemo),
       }),
       compare_projects: tool({
         description: copilotToolDescriptions.compare_projects,
         inputSchema: compareProjectsInputSchema,
-        execute: async (input: CompareProjectsInput) => withGuardrails(await executeCompareProjects(input)),
+        execute: safeTool("compare_projects", executeCompareProjects),
       }),
       dld_transaction_search: tool({
         description: copilotToolDescriptions.dld_transaction_search,
         inputSchema: dldTransactionSearchInputSchema,
-        execute: async (input: DldTransactionSearchInput) => withGuardrails(await executeDldTransactionSearch(input)),
+        execute: safeTool("dld_transaction_search", executeDldTransactionSearch),
       }),
       dld_area_benchmark: tool({
         description: copilotToolDescriptions.dld_area_benchmark,
         inputSchema: dldAreaBenchmarkInputSchema,
-        execute: async (input: DldAreaBenchmarkInput) => withGuardrails(await executeDldAreaBenchmark(input)),
+        execute: safeTool("dld_area_benchmark", executeDldAreaBenchmark),
       }),
       dld_market_pulse: tool({
         description: copilotToolDescriptions.dld_market_pulse,
         inputSchema: dldMarketPulseInputSchema,
-        execute: async () => withGuardrails(await executeDldMarketPulse()),
+        execute: safeTool("dld_market_pulse", async (_input: unknown) => executeDldMarketPulse()),
       }),
       dld_notable_deals: tool({
         description: copilotToolDescriptions.dld_notable_deals,
         inputSchema: dldNotableDealsInputSchema,
-        execute: async (input: DldNotableDealsInput) => withGuardrails(await executeDldNotableDeals(input)),
-      }),
-      refresh_dld_data: tool({
-        description: copilotToolDescriptions.refresh_dld_data,
-        inputSchema: refreshDldDataInputSchema,
-        execute: async () => withGuardrails(await executeRefreshDldData()),
-      }),
-      scenario_stress_test: tool({
-        description: copilotToolDescriptions.scenario_stress_test,
-        inputSchema: scenarioStressTestInputSchema,
-        execute: async (input: ScenarioStressTestInput) => withGuardrails(await executeScenarioStressTest(input)),
+        execute: safeTool("dld_notable_deals", executeDldNotableDeals),
       }),
       mcp_query: tool({
         description:
           "Execute a read-only SQL query against the full Entrestate database. Use for custom analytics, cross-joins, aggregations. Only SELECT/WITH allowed, max 100 rows.",
         inputSchema: mcpQueryInputSchema,
-        execute: async (input: McpQueryInput) => withGuardrails(await mcpQuery(input)),
+        execute: safeTool("mcp_query", mcpQuery),
       }),
       mcp_describe_table: tool({
         description: "Inspect a table's schema: column names, types, row count. Use before querying unfamiliar tables.",
         inputSchema: mcpDescribeTableInputSchema,
-        execute: async (input: McpDescribeTableInput) => await mcpDescribeTable(input.table_name),
-      }),
-      mcp_sample_data: tool({
-        description: "Preview sample rows from any table (1-20 rows). Use to understand data format before writing queries.",
-        inputSchema: mcpSampleDataInputSchema,
-        execute: async (input: McpSampleDataInput) => await mcpSampleData(input.table_name, input.limit),
+        execute: safeToolNoGuard("mcp_describe_table", async (input: McpDescribeTableInput) =>
+          mcpDescribeTable(input.table_name),
+        ),
       }),
       mcp_cross_reference: tool({
         description:
           "Run pre-built cross-reference analytics: price_vs_dld, developer_portfolio, area_intelligence, golden_visa_opportunities, stress_test_report. Optionally filter by area name.",
         inputSchema: mcpCrossReferenceInputSchema,
-        execute: async (input: McpCrossReferenceInput) => withGuardrails(await mcpCrossReference(input)),
+        execute: safeTool("mcp_cross_reference", mcpCrossReference),
       }),
-      mcp_trigger_scraper: tool({
-        description: "Trigger a live data scraper. Currently supports: arvo_dld (DLD transactions from arvo.co API).",
-        inputSchema: mcpTriggerScraperInputSchema,
-        execute: async (input: McpTriggerScraperInput) => await mcpTriggerScraper(input.source),
-      }),
-      apply_decision_lens: tool({
-        description: copilotToolDescriptions.apply_decision_lens,
-        inputSchema: applyDecisionLensInputSchema,
-        execute: async (input: ApplyDecisionLensInput) => withGuardrails(await executeApplyDecisionLens(input)),
-      }),
-      list_market_entities: tool({
-        description: copilotToolDescriptions.list_market_entities,
-        inputSchema: listMarketEntitiesInputSchema,
-        execute: async (input: ListMarketEntitiesInput) => withGuardrails(await executeListMarketEntities(input)),
-      }),
-      generate_decision_object: tool({
-        description: copilotToolDescriptions.generate_decision_object,
-        inputSchema: generateDecisionObjectInputSchema,
-        execute: async (input: GenerateDecisionObjectInput) => {
-          const result = await executeGenerateDecisionObject(input)
-          if (entitlement.accountKey && result.rows?.[0]) {
-            const artifact = result.rows[0]
-            try {
-              // Create a backing timetable for the artifact
-              const timetable = await prisma.timeTable.create({
-                data: {
-                  ownerId: entitlement.accountKey,
-                  intent: `Copilot generation: ${input.project_name}`,
-                  hash: `copilot-${Date.now()}`,
-                  rowGrain: "project",
-                  spec: {},
-                  config: {},
-                },
-              })
-
-              await prisma.decisionObject.create({
-                data: {
-                  id: String(artifact.artifact_id),
-                  timetableId: timetable.id,
-                  ownerId: entitlement.accountKey,
-                  type: artifact.type as any,
-                  status: "ready",
-                  artifactUrls: {
-                    [artifact.format]: `/api/artifacts/download?id=${artifact.artifact_id}`
-                  },
-                },
-              })
-            } catch (dbError) {
-              console.error("Failed to persist decision object:", dbError)
-            }
-          }
-          return withGuardrails(result)
-        },
-      }),
-    }
-
-    // Add Enterprise tools only for Institutional tier
-    if (entitlement.tier === "institutional") {
-      toolset.generate_strategic_report = tool({
-        description: copilotToolDescriptions.generate_strategic_report,
-        inputSchema: generateStrategicReportInputSchema,
-        execute: async (input: GenerateStrategicReportInput) => withGuardrails(await executeGenerateStrategicReport(input)),
-      })
-      toolset.generate_investment_roadmap = tool({
-        description: copilotToolDescriptions.generate_investment_roadmap,
-        inputSchema: generateInvestmentRoadmapInputSchema,
-        execute: async (input: GenerateInvestmentRoadmapInput) => withGuardrails(await executeGenerateInvestmentRoadmap(input)),
-      })
-      toolset.monitor_market_segments = tool({
-        description: copilotToolDescriptions.monitor_market_segments,
-        inputSchema: monitorMarketSegmentsInputSchema,
-        execute: async (input: MonitorMarketSegmentsInput) => withGuardrails(await executeMonitorMarketSegments(input)),
-      })
     }
 
     const normalizedMessages = normalizeIncomingMessages(body.messages)
@@ -400,7 +319,7 @@ export async function POST(request: Request) {
       messages: await convertToModelMessages(normalizedMessages, { tools: toolset }),
       temperature: 0.3,
       stopWhen: stepCountIs(6),
-      toolChoice: "auto",
+      toolChoice: "required",
       tools: toolset,
       onFinish: async ({ text, toolCalls }) => {
         if (userId && (text || (toolCalls && toolCalls.length > 0))) {

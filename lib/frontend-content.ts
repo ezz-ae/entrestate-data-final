@@ -1,6 +1,5 @@
 import "server-only"
 import { Prisma, dbQuery } from "@/lib/db"
-import { getDetailTableSql } from "@/lib/inventory-table"
 
 export type HomepageSectionRow = {
   id: string
@@ -35,7 +34,7 @@ export type ApiContentRow = {
   tier_required: string | null
 }
 
-const DETAIL_TABLE_SQL = getDetailTableSql()
+const SUMMARY_TABLE_SQL = Prisma.raw("inventory_clean")
 
 export async function getHomepageContentSections() {
   const rows = await dbQuery<HomepageSectionRow>(Prisma.sql`
@@ -69,11 +68,11 @@ export async function getMarketPulseSummary() {
   const rows = await dbQuery<MarketPulseSummary>(Prisma.sql`
     SELECT
       COUNT(*)::int AS total,
-      ROUND(AVG(l1_canonical_price) FILTER (WHERE l1_canonical_price > 0))::int AS avg_price,
-      ROUND(AVG(l1_canonical_yield::numeric) FILTER (WHERE l1_canonical_yield > 0), 1) AS avg_yield,
-      COUNT(CASE WHEN l3_timing_signal = 'BUY' THEN 1 END)::int AS buy_signals,
-      COUNT(CASE WHEN l1_confidence = 'HIGH' THEN 1 END)::int AS high_confidence
-    FROM ${DETAIL_TABLE_SQL}
+      ROUND(AVG(price_from) FILTER (WHERE price_from > 0))::int AS avg_price,
+      ROUND(AVG(rental_yield::numeric) FILTER (WHERE rental_yield > 0), 1) AS avg_yield,
+      COUNT(CASE WHEN timing_label IN ('STRONG_BUY', 'BUY') THEN 1 END)::int AS buy_signals,
+      COUNT(CASE WHEN price_confidence = 'HIGH' THEN 1 END)::int AS high_confidence
+    FROM ${SUMMARY_TABLE_SQL}
   `)
 
   return {
