@@ -753,9 +753,9 @@ export async function listDevelopers(): Promise<{
           buy_signals::int AS buy_signals,
           safe_projects::int AS safe_projects,
           CASE
-            WHEN jsonb_typeof(areas::jsonb) = 'array' THEN
-              ARRAY(SELECT value FROM jsonb_array_elements_text(areas::jsonb))
-            WHEN jsonb_typeof(areas::jsonb) = 'string' THEN
+            WHEN jsonb_typeof(to_jsonb(areas)) = 'array' THEN
+              ARRAY(SELECT value FROM jsonb_array_elements_text(to_jsonb(areas)))
+            WHEN jsonb_typeof(to_jsonb(areas)) = 'string' THEN
               regexp_split_to_array(areas::text, E' *, *')
             ELSE ARRAY[]::text[]
           END AS top_areas,
