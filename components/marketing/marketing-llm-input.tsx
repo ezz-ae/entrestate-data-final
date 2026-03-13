@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, Sparkles, Paperclip, Globe, Zap } from "lucide-react"
+import { Send, Paperclip, Globe, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { authClient } from "@/lib/auth/client"
 
 const placeholders = [
   "Ask anything about the real estate market...",
@@ -15,6 +16,8 @@ const placeholders = [
 ]
 
 export function MarketingLLMInput() {
+  const { data: session } = authClient.useSession()
+  const canUpload = Boolean(session?.user)
   const [input, setInput] = useState("")
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
 
@@ -56,7 +59,13 @@ export function MarketingLLMInput() {
           
           <div className="flex items-center justify-between p-2 border-t border-border/10">
             <div className="flex gap-1">
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-xl">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-xl"
+                disabled={!canUpload}
+                title={canUpload ? "Attach file" : "Log in to attach files"}
+              >
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-xl">
