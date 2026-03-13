@@ -12,10 +12,13 @@ const REQUIRED_SECTIONS = [
   "yield-labels",
   "evidence-levels",
   "decision-labels",
+  "affordability",
+  "outcome-intents",
   "top-projects",
   "area-intelligence",
   "developer-reliability",
   "golden-visa",
+  "trust-bar",
   "dld-market",
 ] as const
 
@@ -28,10 +31,14 @@ const SECTION_ALIASES: Record<string, RequiredSection> = {
   yield_labels: "yield-labels",
   evidence_levels: "evidence-levels",
   decision_labels: "decision-labels",
+  affordability: "affordability",
+  outcome_intents: "outcome-intents",
   top_projects: "top-projects",
   area_intelligence: "area-intelligence",
   developer_reliability: "developer-reliability",
   golden_visa: "golden-visa",
+  trust_bar: "trust-bar",
+  confidence: "trust-bar",
   dld_market: "dld-market",
 }
 
@@ -63,6 +70,14 @@ const SECTION_COPY: Record<
     title: "Decision Labels",
     subtitle: "STRONG_BUY to AVOID distribution across scored inventory.",
   },
+  affordability: {
+    title: "Affordability Tiers",
+    subtitle: "Project mix by affordability segment and yield profile.",
+  },
+  "outcome-intents": {
+    title: "Outcome Intents",
+    subtitle: "What investor goals the current inventory best serves.",
+  },
   "top-projects": {
     title: "Top Projects",
     subtitle: "Ranked projects table with price, yield, stress, timing, and score fields.",
@@ -79,6 +94,10 @@ const SECTION_COPY: Record<
     title: "Golden Visa",
     subtitle: "Eligible inventory counts and quality profile for AED 2M+ buyers.",
   },
+  "trust-bar": {
+    title: "Trust Bar",
+    subtitle: "Data hierarchy, engine stack, and confidence distribution across the dataset.",
+  },
   "dld-market": {
     title: "DLD Market",
     subtitle: "Transaction snapshots and notable deal flow from DLD feeds.",
@@ -88,7 +107,9 @@ const SECTION_COPY: Record<
 function sectionLayoutClass(section: (typeof REQUIRED_SECTIONS)[number]) {
   if (section === "market-pulse") return "xl:col-span-3"
   if (section === "top-projects") return "xl:col-span-3"
+  if (section === "outcome-intents") return "xl:col-span-2"
   if (section === "area-intelligence") return "xl:col-span-2"
+  if (section === "trust-bar") return "xl:col-span-2"
   if (section === "dld-market") return "xl:col-span-2"
   return "xl:col-span-1"
 }
