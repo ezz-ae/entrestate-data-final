@@ -1268,6 +1268,20 @@ export function ChatInterface({
             <MarqueePrompts onPromptSelect={(prompt) => { void sendPrompt(prompt) }} />
           </div>
 
+          {/* ── Example Chips ── */}
+          <div className="flex flex-wrap justify-center gap-3 mb-10 max-w-4xl">
+            {capabilityCards.map((card) => (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => void sendPrompt(card.prompt)}
+                className="px-6 py-3 bg-card/60 backdrop-blur-md hover:bg-card border border-border/40 hover:border-primary/40 rounded-2xl text-sm font-bold text-muted-foreground hover:text-foreground transition-all shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 active:scale-95"
+              >
+                {card.label}
+              </button>
+            ))}
+          </div>
+
           {/* ── Input Shell ── */}
           <div className="w-full max-w-3xl group mb-20">
             <div className="relative">
@@ -1275,21 +1289,6 @@ export function ChatInterface({
               
               <div className="relative bg-card/80 backdrop-blur-xl rounded-2xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_8px_30px_rgba(47,90,166,0.1)] focus-within:border-primary/40 transition-all">
                 <form onSubmit={submitMessage}>
-                  <div className="border-b border-border/10 px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      {capabilityCards.map((card) => (
-                        <button
-                          key={card.label}
-                          type="button"
-                          onClick={() => void sendPrompt(card.prompt)}
-                          className="px-4 py-2 bg-card/60 backdrop-blur-md hover:bg-card border border-border/40 hover:border-primary/40 rounded-2xl text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shadow-sm hover:shadow-primary/10"
-                        >
-                          {card.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="relative min-h-[120px] p-2">
                     <Textarea
                       value={input}
