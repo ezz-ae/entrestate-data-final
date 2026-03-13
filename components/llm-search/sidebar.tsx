@@ -12,6 +12,14 @@ import {
   Database,
   Bot,
   BarChart3,
+  Search,
+  Bookmark,
+  GitCompare,
+  Import,
+  Calculator,
+  TrendingUp,
+  ShieldCheck,
+  Layers,
   Send,
   Sparkles,
   MessageSquare,
@@ -259,11 +267,19 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
   const avatar = user?.image || "/avatars/avatar-01.svg"
 
   const workspaceLinks = [
+    { label: "Workspace Home", href: "/workspace", icon: LayoutGrid, description: "Overview and activity" },
     { label: "Notebook", href: "/notebook", icon: BookOpen, description: "Decision notebooks" },
-    { label: "Data Dashboard", href: "/dashboard", icon: LayoutGrid, description: "KPIs and activity" },
-    { label: "Data Science Dashboard", href: "/workspace/data-scientist", icon: Database, description: "EDA + modeling" },
-    { label: "Market Data", href: "/top-data", icon: BarChart3, description: "Signals + timing" },
-    { label: "Agent Builder", href: "/apps/agent-builder", icon: Bot, description: "Automation builder" },
+    { label: "Dashboards", href: "/workspace/dashboards", icon: BarChart3, description: "Layered market views" },
+    { label: "Market Research Desk", href: "/workspace/data-scientist", icon: Database, description: "EDA + modeling" },
+    { label: "Market Score", href: "/market-score", icon: ShieldCheck, description: "Score validation" },
+    { label: "Investor Match Desk", href: "/agent-runtime", icon: TrendingUp, description: "Match client profiles" },
+    { label: "Market Data Packs", href: "/workspace/daas", icon: Layers, description: "Data products" },
+    { label: "Lead Flow Builder", href: "/workspace/agent-creator", icon: Bot, description: "Automation builder" },
+    { label: "Search", href: "/workspace/search", icon: Search, description: "City/area/project search" },
+    { label: "Saved Searches", href: "/workspace/saved-searches", icon: Bookmark, description: "Bookmarked queries" },
+    { label: "Comparisons", href: "/workspace/comparisons", icon: GitCompare, description: "Side-by-side scenarios" },
+    { label: "Data Sources", href: "/workspace/imports", icon: Import, description: "Managed ingestion" },
+    { label: "Math Tools", href: "/workspace/math-tools", icon: Calculator, description: "Calculators and builders" },
   ]
 
   // Handle auto-open and session loading from URL
@@ -517,14 +533,14 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
         <div className="flex flex-col gap-2 pb-4 items-center w-full px-2">
           <div className="group relative flex justify-center">
             <Link
-              href="/account/profile"
+              href="/workspace"
               onClick={handleCloseSidebar}
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full overflow-hidden border border-border/60 bg-background"
             >
               <Image src={avatar} alt={displayName} width={36} height={36} className="object-cover" />
             </Link>
             <span className="absolute left-full ml-4 rounded bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 z-50 pointer-events-none whitespace-nowrap">
-              Profile
+              Workspace
             </span>
           </div>
         </div>
@@ -550,7 +566,11 @@ export function LlmSidebar({ authenticated = true }: { authenticated?: boolean }
                       <Menu className="h-4 w-4" />
                     </Button>
                   ) : null}
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  {authenticated ? (
+                    <Image src={avatar} alt={displayName} width={20} height={20} className="h-5 w-5 rounded-full object-cover" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-primary" />
+                  )}
                   <h2 className="text-sm font-semibold">Chat</h2>
                 </div>
                 <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8" onClick={handleCloseSidebar}>
